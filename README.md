@@ -58,7 +58,11 @@ pip install django
 
 django-admin startproject skillfolio_backend
 
-# 6. Run the server:
+# 6. Apply migrations:
+
+python manage.py migrate
+
+# 7. Run the server:
 
 python manage.py runserver
 
