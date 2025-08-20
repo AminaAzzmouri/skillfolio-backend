@@ -35,17 +35,38 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 ## ⚡ Getting Started
 
-```bash
-# Clone repo
+# Project Setup Instructions:
+
+# 1. Clone repo
+
 git clone https://github.com/AminaAzzmouri/skillfolio-backend.git
 
-# Create virtual environment
+# 2. Create a virtual environment
+
 python -m venv venv
-source venv/bin/activate   # or venv\Scripts\activate on Windows
 
-# Install dependencies
-pip install -r requirements.txt
+# 3. Activate the virtual environment:
 
-# Run server
+    - Windows: venv\Scripts\activate
+    - macOS/Linux: source venv/bin/activate
+
+# 4. Install dependencies
+
+pip install django
+
+# 5. Start the Django project:
+
+django-admin startproject skillfolio_backend
+
+# 6. Run the server:
+
 python manage.py runserver
-```
+
+---
+
+## Branching Strategy
+
+- chore/django-setup: Initial project setup
+- feature/<feature-name>: Any new feature
+- fix/<fix-name>: Bug fixes
+- experiment/<experiment-name>: Experimental changes
