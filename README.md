@@ -53,6 +53,7 @@ python -m venv venv
 # 4. Install dependencies
 
 pip install django
+pip install -r requirements.txt
 
 # 5. Start the Django project:
 
