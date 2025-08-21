@@ -12,6 +12,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Upload and manage certificates (PDF, with metadata: title, date, specialty)
 - CRUD for achievements
 - Link projects to certificates (with guided description form)
+- Set and track learning goals (with deadlines and progress tracking)
 - REST API endpoints for the frontend
 
 ---
@@ -148,6 +149,27 @@ INSTALLED_APPS = [
   - Introduce project status (planned, in progress, completed)
   - Connect projects to specific skills for better tracking
   - Test API endpoints for projects and prepare for frontend integration
+
+---
+
+- **feature/user-goals:**
+
+  **Purpose:** Implement the Goal model, enabling users to define learning or achievement objectives. Goals give context to certificates and projects by setting measurable targets (e.g., complete 5 projects before a deadline).
+
+  **Current Status:**
+
+  - Goal model created in `users/models.py`
+  - Linked to User with fields: target_projects, deadline, created_at
+  - Admin registration completed
+  - Serializer and views prepared
+  - URLs configured for CRUD operations
+
+  **Next Steps:**
+
+  - Add validation to prevent past deadlines
+  - Extend Goal model to track progress dynamically (e.g., % completion based on linked projects)
+  - Allow users to mark goals as achieved or in progress
+  - Test Goal API endpoints and integrate with frontend
 
 ---
 

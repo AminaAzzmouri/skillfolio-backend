@@ -33,3 +33,14 @@ class Project(models.Model):
 
     def __str__(self):
         return self.title
+
+
+# Goal model
+class Goal(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="goals")
+    target_projects = models.IntegerField()
+    deadline = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
