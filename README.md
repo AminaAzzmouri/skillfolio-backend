@@ -67,20 +67,63 @@ python manage.py migrate
 
 python manage.py runserver
 
+# 8. Create the users app (feature/user-model branch):
+
+# Inside the Django project folder (where manage.py is located), run:
+
+python manage.py startapp users
+
+**App Explanation:**  
+ The `users` app serves as the central place for user-related models and functionality. By keeping all user, certificate, project, and goal-related models in this single app, we avoid unnecessary app fragmentation. This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
+
+# Make sure to add 'users' to INSTALLED_APPS in settings.py:
+
+INSTALLED_APPS = [
+...,
+'rest_framework',
+'users', # <-- newly created app
+]
+
 ---
 
 ## Branching Strategy
 
-- chore/django-setup: Initial project setup, including Django project creation, virtual environment, and basic configurations.
+- **chore/django-setup:**  
+  Initial project setup, including Django project creation, virtual environment, and basic configurations.
 
-- feature/user-model:
+- **feature/user-model:**
 
-\*\*\* Purpose: Prepare the users app and the User model for future customization. This branch ensures the backend is ready for authentication and user-related features.
+  **Purpose:** Prepare the `users` app and the User model for future customization. This branch ensures the backend is ready for authentication and user-related features.
 
-\*\*\* Current Status: > users app created > models.py includes a placeholder for the User model > No custom fields added yet
+  **Current Status:**
 
-\*\*\* Next Steps: > Customize the User model if needed > Setup authentication (register, login, logout, JWT) > Integrate User model with Certificates and Projects when those models are added
+  - `users` app created
+  - `models.py` includes a placeholder for the User model (no custom fields yet)
+  - Added `users` to `INSTALLED_APPS` in settings.py
 
-- fix/<fix-name>: Bug fixes
+  **Next Steps:**
 
-- experiment/<experiment-name>: Experimental changes
+  - Customize the User model if needed
+  - Setup authentication (register, login, logout, JWT)
+  - Integrate User model with Certificates and Projects when those models are added
+
+- **feature/certificate-model:**
+
+  **Purpose:** Implement the Certificate model, enabling users to upload, manage, and associate certificates with their accounts. This branch sets up the model, serializers, views, and API endpoints for certificates.
+
+  **Current Status:**
+
+  - Certificate model created in `users/models.py`
+  - Admin registration completed
+  - Serializer and views prepared
+  - URLs configured for CRUD operations
+
+  **Next Steps:**
+
+  - Test certificate APIs
+  - Add validations or additional fields if needed
+  - Integrate with frontend endpoints
+
+- **fix/<fix-name>:** Bug fixes
+
+- **experiment/<experiment-name>:** Experimental changes
