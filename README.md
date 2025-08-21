@@ -71,7 +71,16 @@ python manage.py runserver
 
 ## Branching Strategy
 
-- chore/django-setup: Initial project setup
-- feature/<feature-name>: Any new feature
+- chore/django-setup: Initial project setup, including Django project creation, virtual environment, and basic configurations.
+
+- feature/user-model:
+
+\*\*\* Purpose: Prepare the users app and the User model for future customization. This branch ensures the backend is ready for authentication and user-related features.
+
+\*\*\* Current Status: > users app created > models.py includes a placeholder for the User model > No custom fields added yet
+
+\*\*\* Next Steps: > Customize the User model if needed > Setup authentication (register, login, logout, JWT) > Integrate User model with Certificates and Projects when those models are added
+
 - fix/<fix-name>: Bug fixes
+
 - experiment/<experiment-name>: Experimental changes
