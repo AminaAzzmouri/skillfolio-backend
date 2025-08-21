@@ -91,6 +91,8 @@ INSTALLED_APPS = [
 - **chore/django-setup:**  
   Initial project setup, including Django project creation, virtual environment, and basic configurations.
 
+---
+
 - **feature/user-model:**
 
   **Purpose:** Prepare the `users` app and the User model for future customization. This branch ensures the backend is ready for authentication and user-related features.
@@ -106,6 +108,8 @@ INSTALLED_APPS = [
   - Customize the User model if needed
   - Setup authentication (register, login, logout, JWT)
   - Integrate User model with Certificates and Projects when those models are added
+
+---
 
 - **feature/certificate-model:**
 
@@ -124,6 +128,31 @@ INSTALLED_APPS = [
   - Add validations or additional fields if needed
   - Integrate with frontend endpoints
 
+---
+
+- **feature/project-model:**
+
+  **Purpose:** Implement the Project model, allowing users to document their projects and link them with certificates. This branch focuses on building a structure where achievements and certificates can be contextualized with practical applications (projects).
+
+  **Current Status:**
+
+  - Project model created in `users/models.py`
+  - Admin registration completed
+  - Serializer and views prepared
+  - URLs configured for CRUD operations
+  - Initial fields: title, description, related certificate, created_at
+
+  **Next Steps:**
+
+  - Add guided questions to help users describe their projects (e.g., problem solved, tools used, impact achieved)
+  - Introduce project status (planned, in progress, completed)
+  - Connect projects to specific skills for better tracking
+  - Test API endpoints for projects and prepare for frontend integration
+
+---
+
 - **fix/<fix-name>:** Bug fixes
+
+---
 
 - **experiment/<experiment-name>:** Experimental changes

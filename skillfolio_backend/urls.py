@@ -5,6 +5,7 @@ from users import views
 
 router = routers.DefaultRouter()
 router.register(r'certificates', views.CertificateViewSet)
+router.register(r'projects', views.ProjectViewSet)
 
 
 
