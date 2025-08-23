@@ -6,6 +6,9 @@ Purpose
 Expose authenticated CRUD APIs for Certificate, Project, and Goal models,
 and provide minimal JWT-based authentication endpoints tailored for email login.
 
+Each get_queryset() filters objects by user=self.request.user, and perform_create() automatically assigns the currently authenticated user. 
+This means every CRUD operation you perform via /api/certificates/, /api/projects/ or /api/goals/ will only show or modify data belonging to the logged‑in user, and nothing else.
+
 Highlights
 - Email-based JWT login (posts {email, password}, internally mapped to username).
 - Simple register endpoint (dev helper) that creates a Django User using email as username.
@@ -62,8 +65,9 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     """
     POST /api/auth/login/
     ----------------------------------------------------------------------------
-    Accepts JSON: {"email": "...", "password": "..."} or {"username": "...", "password": "..."}
-    Returns: { "refresh": "...", "access": "..." }
+    Accepts JSON: {"email": "...", "password": "..."} or {"username": "...", "password": "..."} via a custom serializer that maps email → username), /api/auth/refresh/ to renew tokens, and /api/auth/register/ to create a user quickly.
+    
+    These endpoints return { "refresh": "...", "access": "..." } tokens so the frontend can authenticate requests without a session cookie.
     """
     serializer_class = EmailTokenObtainPairSerializer
 
@@ -155,9 +159,9 @@ class CertificateViewSet(OwnerScopedModelViewSet):
     - Filtering/Search/Ordering support for FE list views.
 
     Query params:
-      - filter:   ?issuer=<str>&date_earned=<YYYY-MM-DD>
-      - search:   ?search=<substring>  (title, issuer)
-      - ordering: ?ordering=date_earned  or  ?ordering=-date_earned  (also "title")
+      - filter:   ?issuer=<str>&date_earned=<YYYY-MM-DD>                              > filters by issuer/date
+      - search:   ?search=<substring>  (title, issuer)                                > searches title or issuer
+      - ordering: ?ordering=date_earned  or  ?ordering=-date_earned  (also "title")   > orders newest first
     """
     queryset = Certificate.objects.all()
     serializer_class = CertificateSerializer
@@ -175,9 +179,9 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     - Includes select_related('certificate') for efficient list queries.
 
     Query params:
-      - filter:   ?certificate=<id>
-      - search:   ?search=<substring>  (title, description)
-      - ordering: ?ordering=date_created  or  ?ordering=-date_created  (also "title")
+      - filter:   ?certificate=<id>                                                     > filters projects linked to a certificate
+      - search:   ?search=<substring>  (title, description)                             > applies to title/description and creation date.
+      - ordering: ?ordering=date_created  or  ?ordering=-date_created  (also "title")   > applies to title/description and creation date.
     """
     queryset = Project.objects.select_related("certificate").all()
     serializer_class = ProjectSerializer
@@ -194,8 +198,8 @@ class GoalViewSet(OwnerScopedModelViewSet):
     - List/create/update/delete goals owned by the authenticated user.
 
     Query params:
-      - filter:   ?deadline=<YYYY-MM-DD>
-      - ordering: ?ordering=created_at or ?ordering=-created_at
+      - filter:   ?deadline=<YYYY-MM-DD>                          > filters by deadline
+      - ordering: ?ordering=created_at or ?ordering=-created_at   > shows most recent first.
 
     Week 4 ideas:
       - Expose computed progress (% completed / target_projects) as a read-only

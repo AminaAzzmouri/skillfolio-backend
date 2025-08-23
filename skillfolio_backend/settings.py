@@ -38,6 +38,7 @@ SECRET_KEY = 'django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z
 
 # DEBUG: Enables error pages with full tracebacks.
 # ⚠️ Only True during development; never True in production!
+# When true, Django serves MEDIA_ROOT and MEDIA_URL files directly 
 DEBUG = True    
 
 # ALLOWED_HOSTS: List of domains/IPs Django can serve.
@@ -64,7 +65,7 @@ INSTALLED_APPS = [
 
     # Third-party apps
     'rest_framework',     # Django REST Framework (API engine)
-    'corsheaders',        # Cross-Origin Resource Sharing 'CORS' (for frontend dev)
+    'corsheaders',        # Cross-Origin Resource Sharing 'CORS' (to allow the front‑end (in another port) to call the API during development.)
     'django_filters',     # Filtering support in DRF APIs
 
     # Local apps
@@ -97,7 +98,7 @@ MIDDLEWARE = [
 # - Auth with JWT
 # - Default permission = IsAuthenticated
 # - Filtering, search, ordering
-# - Pagination
+# - Pagination is configured with a default page size of 10. You can disable it or navigate pages with ?page= query parameters.
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -208,7 +209,6 @@ MEDIA_URL = "/media/"
 
 # MEDIA_ROOT ensures uploaded cert PDFs/images are stored in ./media/
 MEDIA_ROOT = BASE_DIR / "media"
-
 
 
 # -------------------------------------------------------------------

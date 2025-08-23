@@ -246,11 +246,19 @@ Base: /api/goals/
 curl -X POST http://127.0.0.1:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{"email":"you@example.com","password":"pass1234"}'
+  
+  -----------------------------------------------------------------------------------------------------------------------------------------------
+  This returns the new user’s id, username and email. It stores the email both as username and email in the default Django User model. Without running this, there is no user to log in.
+  -----------------------------------------------------------------------------------------------------------------------------------------------
        
 #### Login → get access/refresh
 curl -X POST http://127.0.0.1:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"pass1234"}'     # Copy the "access" token.
+  -d '{"username":"you@example.com","password":"pass1234"}'     # Use the returned access token for subsequent requests.
+
+  -----------------------------------------------------------------------------------------------------------------------------------------------
+  If the registration succeeded, you should receive a JSON response with access and refresh tokens. These tokens must be included in the Authorization: Bearer <access_token> header when calling protected endpoints.
+  -----------------------------------------------------------------------------------------------------------------------------------------------
 
 # List certificates (requires Bearer token):
 curl http://127.0.0.1:8000/api/certificates/ \
@@ -270,13 +278,19 @@ curl -X POST http://127.0.0.1:8000/api/certificates/ \
   -F "date_earned=2024-07-10" \
   -F "file_upload=@C:/path/to/file.pdf"
 
+-----------------------------------------------------------------------------------------------------------------------------------------------
+  With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. Because the viewsets use OwnerScopedModelViewSet, each user sees only their own certificates/projects/goals.
+  -----------------------------------------------------------------------------------------------------------------------------------------------
+
 # Filter projects by certificate
 curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
   -H "Authorization: Bearer <ACCESS_TOKEN>"
   - You should only see your objects in list/detail views.
 
+-----------------------------------------------------------------------------------------------------------------------------------------------
 ℹ️ All list endpoints support pagination via ?page=N.
 🔒 Every resource is scoped to the authenticated user: you only ever see your own objects.
+-----------------------------------------------------------------------------------------------------------------------------------------------
 
 ---
 
