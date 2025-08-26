@@ -1,0 +1,65 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 1953 >>
+stream
+BT
+/F1 12 Tf
+72 750 Td (Skillfolio Backend Progress Update) Tj
+72 734 Td () Tj
+72 718 Td (This document summarises the current state of the Skillfolio backend and highlights the) Tj
+72 702 Td (key features added during the recent development period.) Tj
+72 686 Td () Tj
+72 670 Td (The backend now supports JWT-based authentication. Users can register, log in with their) Tj
+72 654 Td (email and password, and receive access/refresh tokens.) Tj
+72 638 Td () Tj
+72 622 Td (A simple registration endpoint allows creation of users during development. The login) Tj
+72 606 Td (endpoint maps the email field to Django's username for convenience.) Tj
+72 590 Td () Tj
+72 574 Td (The REST API exposes endpoints for certificates, projects and goals. All endpoints are) Tj
+72 558 Td (scoped to the authenticated user via a base view set and cannot be accessed without a) Tj
+72 542 Td (valid Bearer token.) Tj
+72 526 Td () Tj
+72 510 Td (Filtering, searching and ordering parameters are enabled on list endpoints using) Tj
+72 494 Td (django-filter and DRF's search filters.) Tj
+72 478 Td () Tj
+72 462 Td (File uploads are supported on certificates. Uploaded files are stored in a local media) Tj
+72 446 Td (folder. Pagination \(10 items per page\) is enabled for lists.) Tj
+72 430 Td () Tj
+72 414 Td (All modules and routing files include descriptive comments to help future developers) Tj
+72 398 Td (understand the purpose of each component.) Tj
+72 382 Td () Tj
+72 366 Td (The README has been updated with setup instructions, usage examples \(curl commands\), and) Tj
+72 350 Td (next steps such as adding validations, richer project status fields, progress) Tj
+72 334 Td (computations on goals, and API documentation.) Tj
+72 318 Td () Tj
+72 302 Td (These improvements create a solid foundation for connecting the frontend with a secure,) Tj
+72 286 Td (user-specific backend that can be extended with additional business logic in future weeks.) Tj
+72 270 Td () Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2316
+%%EOF

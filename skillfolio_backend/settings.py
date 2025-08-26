@@ -14,6 +14,11 @@ Central configuration file that controls how Django behaves:
 
 This file is critical to ensure the backend runs properly and integrates
 with the frontend (via JWT + CORS).
+
+Week 4 Notes
+-------------------------------------------------------------------------------
+- Models/serializers/admin were enhanced; settings itself remains valid.
+- If you later add JWT Blacklist or Swagger, we’ll update INSTALLED_APPS/URLs.
 """
 
 from pathlib import Path

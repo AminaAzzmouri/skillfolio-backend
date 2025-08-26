@@ -6,8 +6,8 @@ Purpose
 Expose authenticated CRUD APIs for Certificate, Project, and Goal models,
 and provide minimal JWT-based authentication endpoints tailored for email login.
 
-Each get_queryset() filters objects by user=self.request.user, and perform_create() automatically assigns the currently authenticated user. 
-This means every CRUD operation you perform via /api/certificates/, /api/projects/ or /api/goals/ will only show or modify data belonging to the logged‑in user, and nothing else.
+Each get_queryset() filters objects by user=self.request.user, and perform_create() automatically assigns the currently authenticated user.
+This means every CRUD operation you perform via /api/certificates/, /api/projects/ or /api/goals/ will only show or modify data belonging to the logged-in user, and nothing else.
 
 Highlights
 - Email-based JWT login (posts {email, password}, internally mapped to username).
@@ -16,6 +16,12 @@ Highlights
     * Only returns request.user’s objects.
     * Automatically assigns user on create.
 - Filtering/Search/Ordering enabled for FE integration (DRF + django-filter).
+
+Week 4 Enhancements
+-------------------------------------------------------------------------------
+- Projects API: now exposes `status` and guided fields; adds filtering by `status`
+  and retains optional filtering by `certificate`.
+- Goals API: still CRUD; progress is exposed via serializer (`progress_percent`).
 """
 
 from django.contrib.auth import get_user_model
@@ -66,7 +72,7 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     POST /api/auth/login/
     ----------------------------------------------------------------------------
     Accepts JSON: {"email": "...", "password": "..."} or {"username": "...", "password": "..."} via a custom serializer that maps email → username), /api/auth/refresh/ to renew tokens, and /api/auth/register/ to create a user quickly.
-    
+
     These endpoints return { "refresh": "...", "access": "..." } tokens so the frontend can authenticate requests without a session cookie.
     """
     serializer_class = EmailTokenObtainPairSerializer
@@ -76,6 +82,7 @@ class EmailTokenObtainPairView(TokenObtainPairView):
 # Quick register endpoint (developer helper)
 # -----------------------------------------------------------------------------
 User = get_user_model()
+
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
@@ -179,14 +186,14 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     - Includes select_related('certificate') for efficient list queries.
 
     Query params:
-      - filter:   ?certificate=<id>                                                     > filters projects linked to a certificate
-      - search:   ?search=<substring>  (title, description)                             > applies to title/description and creation date.
-      - ordering: ?ordering=date_created  or  ?ordering=-date_created  (also "title")   > applies to title/description and creation date.
+      - filter:   ?certificate=<id> &/or ?status=<planned|in_progress|completed>
+      - search:   ?search=<substring>  (title, description, problem_solved, tools_used, impact)
+      - ordering: ?ordering=date_created  or  ?ordering=-date_created  (also "title")
     """
     queryset = Project.objects.select_related("certificate").all()
     serializer_class = ProjectSerializer
-    filterset_fields = ["certificate"]   # /api/projects/?certificate=<id>
-    search_fields = ["title", "description"]
+    filterset_fields = ["certificate", "status"]   # /api/projects/?certificate=<id>&status=<choice>
+    search_fields = ["title", "description", "problem_solved", "tools_used", "impact"]
     ordering_fields = ["date_created", "title"]
 
 
@@ -203,8 +210,8 @@ class GoalViewSet(OwnerScopedModelViewSet):
 
     Week 4 ideas:
       - Expose computed progress (% completed / target_projects) as a read-only
-        serializer field.
-      - Add validation to prevent past deadlines.
+        serializer field (implemented in serializer).
+      - Add validation to prevent past deadlines (still optional).
     """
     queryset = Goal.objects.all()
     serializer_class = GoalSerializer

@@ -20,10 +20,33 @@ General Notes
   permissions straightforward.
 - File uploads for certificates are stored under MEDIA_ROOT/certificates/.
 - Timestamps use `auto_now_add=True` to capture creation time where useful.
+
+Week 4 Enhancements
+-------------------------------------------------------------------------------
+- Certificate: server-side validations for date_earned (no future dates) and
+  uploaded file (type/size).
+- Project: added `status` (planned / in_progress / completed) and guided fields
+  (`problem_solved`, `tools_used`, `impact`) to help users describe outcomes.
+- Goal: compute progress later at the serializer level (percentage of completed
+  projects vs target_projects).
+  
 """
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
+from datetime import date
+
+
+# -----------------------------
+# Helpers / validators (inline)
+# -----------------------------
+def validate_file_size_5mb(f):
+    """Restrict uploads to <= 5 MB."""
+    max_bytes = 5 * 1024 * 1024
+    if f and getattr(f, "size", 0) > max_bytes:
+        raise ValidationError("File too large (max 5 MB).")
 
 
 class Certificate(models.Model):
@@ -50,12 +73,13 @@ class Certificate(models.Model):
     Behavior
     ---------------------------------------------------------------------------
     - __str__: readable representation "Title - Issuer".
+    - clean(): validates that date_earned is not in the future.
 
     Future Enhancements
     ---------------------------------------------------------------------------
-    - Validation: limit allowed file types (PDF/images).
     - Extra fields: certificate_id/code, specialization/track, skill tags.
     - Indexes: add indexes if we’ll filter heavily by issuer or date_earned.
+    
     """
 
     user = models.ForeignKey(
@@ -72,12 +96,21 @@ class Certificate(models.Model):
         blank=True,
         null=True,
         help_text="Optional proof file (PDF/image).",
+        validators=[
+            FileExtensionValidator(allowed_extensions=["pdf", "png", "jpg", "jpeg", "webp"]),
+            validate_file_size_5mb,
+        ],
     )
-    
+
     class Meta:
         ordering = ["-date_earned"]  # Show most recent certificates first
         verbose_name = "Certificate"
-        verbose_name_plural = "Certificates" # Makes admin interface cleaner.
+        verbose_name_plural = "Certificates"  # Makes admin interface cleaner.
+
+    def clean(self):
+        # Prevent future dates for earned certificates
+        if self.date_earned and self.date_earned > date.today():
+            raise ValidationError({"date_earned": "date_earned cannot be in the future."})
 
     def __str__(self):
         return f"{self.title} - {self.issuer}"
@@ -101,6 +134,8 @@ class Project(models.Model):
     ---------------------------------------------------------------------------
     - title (CharField): Project name.
     - description (TextField): Details (what, how, tools, impact).
+    - status (CharField): planned / in_progress / completed (added Week 4).
+    - problem_solved/tools_used/impact (TextFields): guided description fields (Week 4).
     - date_created (DateTimeField auto_now_add): Creation timestamp.
 
     Behavior
@@ -109,10 +144,19 @@ class Project(models.Model):
 
     Future Enhancements
     ---------------------------------------------------------------------------
-    - Fields: status (planned/in-progress/completed), tech stack, tags.
     - Validation: minimum description length, profanity checks, etc.
     - Ordering: default ordering by -date_created for recent-first listings.
+    
     """
+
+    STATUS_PLANNED = "planned"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_CHOICES = [
+        (STATUS_PLANNED, "Planned"),
+        (STATUS_IN_PROGRESS, "In Progress"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
 
     user = models.ForeignKey(
         User,
@@ -130,13 +174,34 @@ class Project(models.Model):
     )
     title = models.CharField(max_length=255, help_text="Project title.")
     description = models.TextField(help_text="What you built, how, tools used, and impact.")
+
+    # Week 4 additions:
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PLANNED,
+        help_text="Current status of the project.",
+    )
+    problem_solved = models.TextField(
+        blank=True,
+        help_text="(Optional) What problem did this project solve?"
+    )
+    tools_used = models.TextField(
+        blank=True,
+        help_text="(Optional) Which tools/technologies did you use?"
+    )
+    impact = models.TextField(
+        blank=True,
+        help_text="(Optional) What was the outcome or impact?"
+    )
+
     date_created = models.DateTimeField(auto_now_add=True, help_text="When this project was created.")
 
     class Meta:
         ordering = ["-date_created"]  # Recent-first ordering
         verbose_name = "Project"
-        verbose_name_plural = "Projects" # Makes admin interface cleaner.
-        
+        verbose_name_plural = "Projects"  # Makes admin interface cleaner.
+
     def __str__(self):
         return self.title
 
@@ -169,6 +234,7 @@ class Goal(models.Model):
     - Validation: ensure deadline is not in the past.
     - Computed progress: percentage of user.projects completed vs target_projects.
     - Status: not_started / on_track / at_risk / achieved.
+    
     """
 
     user = models.ForeignKey(
@@ -184,7 +250,7 @@ class Goal(models.Model):
     class Meta:
         ordering = ["deadline"]  # Goals listed by upcoming deadlines
         verbose_name = "Goal"
-        verbose_name_plural = "Goals" # Makes admin interface cleaner.
-        
+        verbose_name_plural = "Goals"  # Makes admin interface cleaner.
+
     def __str__(self):
         return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
