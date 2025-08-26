@@ -247,10 +247,26 @@ class Goal(models.Model):
     deadline = models.DateField(help_text="Deadline for completing the target.")
     created_at = models.DateTimeField(auto_now_add=True, help_text="When this goal was created.")
 
+
     class Meta:
         ordering = ["deadline"]  # Goals listed by upcoming deadlines
         verbose_name = "Goal"
         verbose_name_plural = "Goals"  # Makes admin interface cleaner.
 
+
+    def clean(self):
+        # Server-side data integrity: positive target & non-past deadline
+        from datetime import date as _date
+        errors = {}
+        if self.target_projects is None or self.target_projects <= 0:
+            errors["target_projects"] = "target_projects must be a positive integer."
+        if self.deadline and self.deadline < _date.today():
+            errors["deadline"] = "deadline cannot be in the past."
+        if errors:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(errors)
+
+
     def __str__(self):
         return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
+

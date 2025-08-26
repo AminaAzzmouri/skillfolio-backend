@@ -372,6 +372,26 @@ curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
 
 ---
 
+- **feature/models-enhancements:**
+
+  **Purpose:** 
+
+  **Current Status:**
+
+  - 
+  - 
+  - 
+
+  **Next Steps:**
+
+  - A
+  - 
+  - 
+  - 
+  - 
+
+---
+
 - **fix/<fix-name>:** Bug fixes
 
 ---

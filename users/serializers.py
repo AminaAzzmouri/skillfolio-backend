@@ -97,21 +97,21 @@ class GoalSerializer(serializers.ModelSerializer):
       - target_projects should be a positive integer
       - deadline should not be in the past
     """
-
+    
     progress_percent = serializers.SerializerMethodField(read_only=True)
+  
+    def validate_target_projects(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError("target_projects must be > 0.")
+        return value
 
-    # Example: enable later in case we want to enforce positive targets
-    # def validate_target_projects(self, value):
-    #     if value <= 0:
-    #         raise serializers.ValidationError("target_projects must be > 0.")
-    #     return value
 
-    # Example: enable later in case we want to forbid past deadlines
-    # def validate_deadline(self, value):
-    #     from datetime import date
-    #     if value < date.today():
-    #         raise serializers.ValidationError("deadline cannot be in the past.")
-    #     return value
+    def validate_deadline(self, value):
+        from datetime import date
+        if value and value < date.today():
+            raise serializers.ValidationError("deadline cannot be in the past.")
+        return value
+
 
     def get_progress_percent(self, obj):
         """
@@ -123,20 +123,26 @@ class GoalSerializer(serializers.ModelSerializer):
         if not request or not getattr(request, "user", None) or not request.user.is_authenticated:
             return 0
 
+
         target = obj.target_projects or 0
         if target <= 0:
             return 0
 
+
+        # Count completed projects for this user
+        from .models import Project as ProjectModel
         completed_count = ProjectModel.objects.filter(
             user=request.user,
             status=ProjectModel.STATUS_COMPLETED,
         ).count()
 
+
         pct = (completed_count / float(target)) * 100.0
-        # Clamp 0..100
         return round(max(0.0, min(pct, 100.0)), 2)
+
 
     class Meta:
         model = Goal
         fields = "__all__"
         read_only_fields = ("id", "user", "created_at", "progress_percent",)
+
