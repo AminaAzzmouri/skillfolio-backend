@@ -12,7 +12,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Upload and manage certificates (PDF, with metadata: title, date, specialty)
 - CRUD for achievements
 - Link projects to certificates (with guided description form)
-- Set and track learning goals (with deadlines and progress tracking)
+- Set and track learning goals (with deadlines, validations, and progress tracking ✅)
 - REST API endpoints for the frontend
 
 ---
@@ -29,7 +29,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 ## 📅 Project Timeline
 
 - Week 3: Django project setup + authentication
-- Week 4: Certificates & achievements models + APIs
+- Week 4: Certificates & achievements models + APIs + Goals model + validations + computed progress
 - Week 5: Testing, polish, deployment
 
 ---
@@ -149,11 +149,77 @@ python manage.py migrate
 python manage.py runserver
 
   - Use Thunder Client/Postman or curl to test:
-      * Register → POST /api/auth/register/ { "email":"you@example.com", "password":"pass1234" }
-      * Login → POST /api/auth/login/ → copy "access" token
-      * List your certificates → GET /api/certificates/ with header Authorization: Bearer <token>
-      * Create certificate → POST /api/certificates/ (JSON or multipart for file)
-      * Projects filter → GET /api/projects/?certificate=<id>
+      * Register 
+      → POST /api/auth/register/ { "email":"you@example.com", "password":"pass1234" }
+
+      * Login 
+      → POST /api/auth/login/ → copy "access" token
+      
+      * List your certificates 
+      → GET /api/certificates/ with header Authorization: Bearer <token>
+      
+      * Create certificate 
+      → POST /api/certificates/ (JSON or multipart for file)
+      
+      * Projects filter 
+      → GET /api/projects/?certificate=<id>
+
+      * How to see progress_percent for goal settings + test validations
+
+        1. Login to obtain your token:
+          curl -X POST http://127.0.0.1:8000/api/auth/login/ \
+          -H "Content-Type: application/json" \
+          -d '{"username":"you@example.com","password":"pass1234"}'
+
+              → **Response:**
+                {
+                  "refresh": "...",
+                  "access": "..."
+                }
+
+           access → short-lived token for Authorization headers.
+           refresh → longer-lived token you can use at /api/auth/refresh/.
+
+        2. Use the token in requests
+
+          curl http://127.0.0.1:8000/api/goals/ \
+          -H "Authorization: Bearer ACCESS_TOKEN_HERE"
+
+         → You should see:
+                            {
+                              "id": 3,
+                              "target_projects": 5,
+                              "deadline": "2025-12-31",
+                              "created_at": "2025-08-23T10:55:41Z",
+                              "progress_percent": 20.0,   // computed from completed projects
+                              "user": 1
+                            }
+
+        → Renew when expired
+
+        curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
+        -H "Content-Type: application/json" \
+        -d '{"refresh":"YOUR_REFRESH_TOKEN"}'
+
+        3. Test validations:
+
+            - Negative target:
+
+              curl -X POST http://127.0.0.1:8000/api/goals/ \
+              -H "Authorization: Bearer ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"target_projects": -1, "deadline": "2030-01-01"}'
+
+            → Expected: {"target_projects": ["target_projects must be > 0."]}
+
+            - Past deadline:
+
+              curl -X POST http://127.0.0.1:8000/api/goals/ \
+              -H "Authorization: Bearer ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"target_projects": 3, "deadline": "2000-01-01"}'
+
+            → Expected: {"deadline": ["deadline cannot be in the past."]}
 
 ===========================================================================
 
@@ -230,8 +296,10 @@ Base: /api/goals/
 | Operation | Method      | URL                | Body                                | Notes                                        |
 | --------- | ----------- | ------------------ | ----------------------------------- | -------------------------------------------- |
 | List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. |
+                                                                                       Includes progress_percent.
 | Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                              |
 | Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`.                  |
+                                                                                       Validates positive target and future date.
 | Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                              |
 | Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                              |
 
@@ -344,12 +412,52 @@ curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
 
   **Next Steps:**
 
-  - Add guided questions to help users describe their projects (e.g., problem solved, tools used, impact achieved)
-  - Introduce project status (planned, in progress, completed)
-  - Add filed: ordering by date_created
-  - Connect projects to specific skills for better tracking
-  - Test API endpoints for projects and prepare for frontend integration
+  - Guided Questions → Auto-generated description:
 
+      * Form UX (short answers + dropdowns):
+        - Work type (dropdown): Individual, Team
+        - Duration (short input): number + unit (e.g., 3 weeks)
+        - Primary goal (dropdown): Practice a new skill, Deliver a feature, Build a demo, Solve a real problem
+        - Challenges faced (multi-select or short free text, concise)
+        - Skills/tools used (short comma-separated list or chips)
+        - Outcome/impact (dropdown): Improved performance, Learned fundamentals, Shipped MVP, Refactored legacy, Other (short)
+        - Skills to practice more (short chips)
+
+      * BE model fields (minimal, additive; description remains stored):
+        - work_type (CharField, choices: individual, team)
+        - duration_text (CharField, e.g., “3 weeks”)
+        - primary_goal (CharField, limited choices)
+        - challenges_short (TextField, short)
+        - skills_used (TextField, short “chips” CSV for now)
+        - outcome_short (CharField/TextField, short)
+        - skills_to_improve (TextField, short)
+        - Keep description as the auto-generated field (still editable by user before submit)
+
+      * Auto-generation template (FE):
+        - work_type (CharField, choices: individual, team)
+        - duration_text (CharField, e.g., “3 weeks”)
+        - primary_goal (CharField, limited choices)
+        - challenges_short (TextField, short)
+        - skills_used (TextField, short “chips” CSV for now)
+        - outcome_short (CharField/TextField, short)
+        - skills_to_improve (TextField, short)
+        - Keep description as the auto-generated field (still editable by user before submit)
+
+        ${title} — ${work_type === 'team' ? 'Team project' : 'Individual project'} (~${duration_text}).
+        Goal: ${primary_goal}.
+        What I built: ${short_summary_optional}.
+        Challenges: ${challenges_short || 'N/A'}.
+        Skills/Tools: ${skills_used || 'N/A'}.
+        Outcome: ${outcome_short || 'N/A'}.
+        Next focus: ${skills_to_improve || 'N/A'}.
+
+        - The FE composes description from the answers; user can tweak the text before submitting.
+        - Store both the answers (new fields) and the final description.
+  
+  - Add edit/delete for projects in UI
+  - Filtering & search (e.g., ?certificate=<id>, ?status=completed, ?search=…)
+  - Pagination (ensure FE reads results when pagination is enabled)
+  
 ---
 
 - **feature/user-goals:**
@@ -361,34 +469,40 @@ curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
   - Model created (target_projects, deadline, created_at)
   - Linked to User with fields: target_projects, deadline, created_at
   - Admin + serializer + views + URLs ready
+  - Note: Core validations and computed fields were completed in feature/models-enhancements (see below).
 
   **Next Steps:**
 
-  - Add validation to prevent past deadlines
-  - Extend Goal model to track progress dynamically (e.g., % completion based on linked projects)
-  - Allow users to mark goals as achieved or in progress
-  - Test Goal API endpoints and integrate with frontend
-  - Server-side progress (% completed projects / target), prevent past deadlines, computed fields.
+  - Extend Goal model to allow marking as achieved/in-progress.
+  - Add optional status field.
+  - Surface goals in Dashboard FE.
 
 ---
 
 - **feature/models-enhancements:**
 
-  **Purpose:** 
+  **Purpose:** Harden and enrich existing models/serializers without breaking FE contracts. Add validation, computed fields, ordering, and admin quality-of-life improvements.
 
   **Current Status:**
 
-  - 
-  - 
-  - 
+  - Goals: serializer-level validations added
+      * target_projects must be > 0
+      * deadline must be in the future
+
+  - Goals: added computed progress_percent (0–100) to list/detail responses
+ (computed from user’s completed projects vs target_projects; placeholder logic is in place and can be refined)
+
+  - Meta ordering kept/confirmed (Certificates: -date_earned, Projects: -date_created, Goals: deadline)
+
+  - Admin polish: confirmed list display for Projects, default admin for Certificates/Goals
 
   **Next Steps:**
 
-  - A
-  - 
-  - 
-  - 
-  - 
+  - Add certificate file constraints (type/size; e.g., PDF/images; ≤ 5MB) with clear 400 messages
+  - Add project status field (planned / in_progress / completed) and server-side checks if needed
+  - Add lightweight analytics endpoints (counts/progress) for dashboard
+  - Optional: object-level permissions hook points for future roles
+  - Optional: DRF schema/docs (drf-yasg) updates for new fields/validations
 
 ---
 
