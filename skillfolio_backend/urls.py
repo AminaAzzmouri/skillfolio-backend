@@ -1,15 +1,14 @@
 """
 urls.py — Root URL configuration for Skillfolio Backend
 
-
 Purpose
 ===============================================================================
 - Connects Django admin, API routers, and authentication endpoints.
 - Serves media files in development (certificates, project uploads, etc.).
 - Exposes DRF ViewSets for Certificates, Projects, and Goals.
 - Adds JWT authentication endpoints (login, refresh) and a simple register.
-- Adds Analytics endpoints for FE summaries/progress (feature/analytics-endpoints).
-
+- Adds Analytics endpoints for FE summaries/progress.
+- Adds Logout (feature/auth-logout-blacklist) to blacklist refresh tokens.
 
 Documentation of endpoints is included inline for clarity.
 """
@@ -17,10 +16,16 @@ Documentation of endpoints is included inline for clarity.
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
-from users import views
+from users import views  # resource ViewSets + analytics live here
 from django.conf import settings
 from django.conf.urls.static import static
-from users.views import EmailTokenObtainPairView
+
+# Auth endpoints (moved to users.auth_views to keep auth logic centralized)
+from users.auth_views import (
+    EmailTokenObtainPairView,
+    register,
+    logout as jwt_logout,
+)
 from rest_framework_simplejwt.views import TokenRefreshView
 
 # -------------------------------------------------------------------
@@ -60,14 +65,15 @@ urlpatterns = [
     path("api/", include(router.urls)),  # → all app API endpoints (certificates, projects, goals)
 
     # Authentication endpoints (JWT)
-    path("api/auth/login/", EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),  # /api/auth/login/
-    path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),            # /api/auth/refresh/
-    path("api/auth/register/", views.register, name="register"),                            # /api/auth/register/
+    path("api/auth/login/",   EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),  # /api/auth/login/
+    path("api/auth/refresh/", TokenRefreshView.as_view(),         name="token_refresh"),      # /api/auth/refresh/
+    path("api/auth/register/", register,                          name="register"),           # /api/auth/register/
+    path("api/auth/logout/",   jwt_logout,                        name="logout"),             # /api/auth/logout/ (blacklist refresh)
 
     # Analytics (feature/analytics-endpoints)
     # GET /api/analytics/summary/         → counts for current user
     # GET /api/analytics/goals-progress/  → list of goals with computed progress_percent
-    path("api/analytics/summary/", views.analytics_summary, name="analytics-summary"),
+    path("api/analytics/summary/",        views.analytics_summary,        name="analytics-summary"),
     path("api/analytics/goals-progress/", views.analytics_goals_progress, name="analytics-goals-progress"),
 ]
 

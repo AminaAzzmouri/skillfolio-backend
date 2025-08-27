@@ -445,6 +445,14 @@ coverage and CI.”
             
             → Expected:  [{"id": 3, "target_projects": 5, à"progress_percent": 40.0, ...}]
 
+7) Logout
+            curl -X POST http://127.0.0.1:8000/api/auth/logout/ \
+            -H "Authorization: Bearer <ACCESS_TOKEN>" \
+            -H "Content-Type: application/json" \
+            -d '{"refresh": "<REFRESH_TOKEN>"}'
+            
+            → Expected:  {"detail":"Successfully logged out."}
+            After that, trying to use the same <REFRESH_TOKEN> at /api/auth/refresh/ will fail.
 ---
 
 ## ⚡ Development Notes
