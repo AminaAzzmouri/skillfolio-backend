@@ -13,8 +13,11 @@ Highlights
 """
 
 from django.contrib import admin
-from .models import Certificate, Project, Goal
+from django.apps import apps 
 
+Certificate = apps.get_model('users', 'Certificate')
+Project = apps.get_model('users', 'Project')
+Goal = apps.get_model('users', 'Goal')
 
 # -----------------------------------------------------------------------------
 # Certificate Admin
