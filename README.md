@@ -14,6 +14,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Link projects to certificates (with guided description form + auto-generated description from guided answers ✅)
 - Set and track learning goals (with deadlines, validations, and progress tracking ✅)
 - REST API endpoints for the frontend
+- Filtering / search / ordering across list endpoints ✅ (see Quick Reference)
 
 ---
 
@@ -114,17 +115,18 @@ pip freeze > requirements.txt
 # 10. Update settings.py:
 
     - Add rest_framework, corsheaders, django_filters, and users to INSTALLED_APPS.
-    - Add CorsMiddleware to MIDDLEWARE.
+    - Add corsheaders.middleware.CorsMiddleware at the top of MIDDLEWARE.
     - Enable CORS_ALLOW_ALL_ORIGINS = True (dev-only).
-    - Configure REST_FRAMEWORK with JWT, permissions, filtering, pagination.
-    - Add optional SIMPLE_JWT lifetimes.
+    - Configure REST_FRAMEWORK with JWT, permissions,filtering/search/ordering backends, pagination.
+    - Add optional SIMPLE_JWT lifetimes (dev-friendly).
     - Configure MEDIA_URL and MEDIA_ROOT for file uploads.
 
 ===========================================================================
 
 # 11. URLs: auth endpoints + media:
 
-In skillfolio_backend/urls.py
+- Wire /api/auth/login/, /api/auth/refresh/, /api/auth/register/.
+- Serve media in dev.
 
 ===========================================================================
 
@@ -255,6 +257,12 @@ Base URL (local): http://127.0.0.1:8000
 **Certificates**: 
 Base: /api/certificates/
 
+        * Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
+        * Search: ?search=<substring> (title, issuer)
+        * Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
+        * Default ordering: newest first (-date_earned)
+        *Pagination: ?page=2
+
 | Operation     | Method      | URL                       | Body                                  | Notes                                  |
 | ------------- | ----------- | ------------------------- | ------------------------------------- | -------------------------------------- |
 | List          | `GET`       | `/api/certificates/       | —                                     | Returns only the authenticated user’s  |
@@ -274,6 +282,13 @@ Base: /api/certificates/
 
 **Projects**:
 Base: /api/projects/
+
+        * Filter: ?certificate=<id>&status=<planned|in_progress|completed>
+        * Search: ?search=<substring> (title, description)
+        * Ordering: ordering=date_created or ?ordering=-date_created (also title)
+        * Default newest first (-date_created)
+        * Pagination: ?page=1
+        * Auto-description: If description is blank on create, BE generates one from guided fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
 
 | Operation | Method      | URL                   | Body                                     | Notes                                           |
 | --------- | ----------- | --------------------- | ---------------------------------------- | ----------------------------------------------- |
@@ -296,6 +311,11 @@ Base: /api/projects/
         
 **Goals**: 
 Base: /api/goals/
+
+        * Filter: ?deadline=<YYYY-MM-DD>
+        * Ordering: ?ordering=created_at or ?ordering=-created_at
+        * Default ordering: newest first (-created_at)
+        * Computed: progress_percent (read-only)
 
 | Operation | Method      | URL                | Body                                | Notes                                        |
 | --------- | ----------- | ------------------ | ----------------------------------- | -------------------------------------------- |
@@ -390,6 +410,72 @@ coverage and CI.”
 (If you provide `description` in POST/PUT, we keep the provided text.)
 
 -----------------------------------------------------------------------------------------------------------------------------------------------
+
+### 🔍 Verifying filters/search/ordering with curl
+
+- Replace ACCESS_TOKEN_HERE with a real token from /api/auth/login/.
+
+    **Certificates**
+    
+    1. List (default = newest first)
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/certificates/"
+
+    2. Filter by issuer + date
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/certificates/?issuer=Coursera&date_earned=2025-08-01"
+
+    3. Search by title/issuer
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/certificates/?search=python"
+
+    4. Order oldest → newest
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/certificates/?ordering=date_earned"
+
+
+    **Projects**
+    
+    1.a. Filter by certificate id
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?certificate=12"
+
+    1.b. Filter by status
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?status=completed"
+
+    2. Search title/description
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?search=dashboard"
+
+    3. Order oldest → newest
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?ordering=date_created"
+
+    4. Paginate
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?page=2"
+
+
+    **Goals**
+    
+    1. Filter by deadline
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/goals/?deadline=2025-12-31"
+
+    2. Order oldest → newest
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/goals/?ordering=created_at"
+
+    3. Order oldest → newest
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?ordering=date_created"
+
+    4. Paginate
+      curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+      "http://127.0.0.1:8000/api/projects/?page=2"
+
+-----------------------------------------------------------------------------------------------------------------------------------------------
 ℹ️ All list endpoints support pagination via ?page=N.
 🔒 Every resource is scoped to the authenticated user: you only ever see your own objects.
 -----------------------------------------------------------------------------------------------------------------------------------------------
@@ -413,7 +499,8 @@ coverage and CI.”
   - `users` app created
   - User model placeholder in models.py
   - Added to `INSTALLED_APPS`
-  - Auth (register, login, JWT) implemented
+  - Email-as-username flow supported
+  - Auth endpoints wired (register, login, refresh)
   - Integrated User model with Certificates and Projects
 
   **Next Steps:** Optionally customize User model later
@@ -508,7 +595,6 @@ coverage and CI.”
   - Tested successfully with curl (auto-description works)
 
   **Next Steps:**:
-  - Ensure FE form provides guided answers
   - Add Swagger/OpenAPI docs for new fields
   - Polish generated text style and handle edge cases
 
@@ -523,11 +609,11 @@ coverage and CI.”
   - Model created (target_projects, deadline, created_at)
   - Linked to User with fields: target_projects, deadline, created_at
   - Admin + serializer + views + URLs ready
+  - progress_percent exposed
   - Note: Core validations and computed fields were completed in feature/models-enhancements (see below).
 
   **Next Steps:**
 
-  - Extend Goal model to allow marking as achieved/in-progress.
   - Add optional status field.
   - Surface goals in Dashboard FE.
 
@@ -558,6 +644,39 @@ coverage and CI.”
   - Optional: object-level permissions hook points for future roles
   - Optional: DRF schema/docs (drf-yasg) updates for new fields/validations
 
+---
+
+- **feature/permissions-and-filters:**
+
+  **Purpose:** Harden permissions feel (owner scoping) and add consistent filtering / search / ordering across endpoints for a better FE query UX.
+
+  **Current Status:**
+      - Owner scoping kept clean and central via OwnerScopedModelViewSet
+
+      * Certificates: 
+            - filterset_fields = ["issuer", "date_earned"]
+            - search_fields = ["title", "issuer"]
+            - ordering_fields = ["date_earned", "title"]
+            - ordering = ["-date_earned"] (default newest first)
+
+      * Projects: 
+            - filterset_fields = ["certificate", "status"]
+            - search_fields = ["title", "description"] (plus optional fields if present)
+            - ordering_fields = ["date_created", "title"]
+            - ordering = ["-date_created"] (default newest first)
+
+      * Goals: 
+            - filterset_fields = ["deadline"]
+            - ordering_fields = ["created_at"]
+            - ordering = ["-created_at"] (default newest first)
+
+      - settings.py: Confirmed django_filters, filter/search/ordering backends, pagination.
+
+      - Notes: We did not add permissions.py; scoping is enforced via queryset + create injection.
+
+  **Next Steps:**
+
+  - Optional explicit object-level permission class if you want an extra belt-and-suspenders check.
 ---
 
 - **fix/<fix-name>:** Bug fixes
