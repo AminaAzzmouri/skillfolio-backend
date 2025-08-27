@@ -63,8 +63,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      pip install django
 
 # 5. Install dependencies
-     We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
-     
+     - We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
      pip install -r requirements.txt
 
      - If you add/change packages, re-freeze:
@@ -77,7 +76,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      python manage.py makemigrations
      python manage.py migrate
 
-     The blacklist tables for logout are created here because rest_framework_simplejwt.token_blacklist is installed
+     The blacklist tables for logout are created here because 
+     rest_framework_simplejwt.token_blacklist is installed
 
 # 7. Run the server:
      python manage.py runserver
@@ -85,12 +85,12 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 # 8. Create the users app  (if it doesn’t exist yet):
 
 #### Inside the Django project folder (where manage.py is located), run:
-     From the folder where manage.py lives:
      python manage.py startapp users
 
-      **App Explanation:**  
-      The users app is the central place for user-related domain models and logic (users, certificates, projects, goals) to avoid fragmentation and simplify relationships.
-      This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
+#### **App Explanation:**  
+     The users app is the central place for user-related domain models and logic (users, certificates, projects, goals) to avoid fragmentation and simplify relationships.
+      
+     This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
 
 #### Add 'users' to INSTALLED_APPS in settings.py:
 
@@ -101,11 +101,10 @@ INSTALLED_APPS = [
 ]
 
 # 9. Install backend auth & integration deps: (JWT, CORS, filtering)
-     (Already covered by requirements.txt; shown here for clarity)
-     
+(Already covered by requirements.txt; shown here for clarity)     
      pip install djangorestframework-simplejwt django-cors-headers django-filter
      
-     # For logout blacklist support:
+## For logout blacklist support:
        pip install "djangorestframework-simplejwt[token_blacklist]"
        pip freeze > requirements.txt
 
@@ -186,7 +185,7 @@ Optional object-level permission class (extra belt-and-suspenders; current owner
    * Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).  
    * Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.  
    This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
-   
+
 ---
 
 ## 📌 API Quick Reference:
@@ -206,38 +205,36 @@ Base URL (local): http://127.0.0.1:8000
     **Login body examples**:  { "email": "you@example.com", "password": "pass1234" }
     - Or:                     { "username": "you@example.com", "password": "pass1234" }
 
-    Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
+    - Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
 
 
 **Certificates**:  Base: /api/certificates/
 
-        * Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
-        * Search: ?search=<substring> ( matches title, issuer)
-        * Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
+* Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
+* Search: ?search=<substring> ( matches title, issuer)
+* Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
 
-        * Default ordering: newest first (-date_earned)
+* Default ordering: newest first (-date_earned)
 
 | Operation     | Method      | URL                       | Body                                  | Notes                                  |
 | ------------- | ----------- | ------------------------- | ------------------------------------- | -------------------------------------- |
-| List          | `GET`       | `/api/certificates/       | —                                     | Returns only the authenticated user’s  |
-|               |             |                           |                                       | certificates.                          |
+| List          | `GET`       | `/api/certificates/       | —                                     | Returns only the authenticated user’s certificates.                          |
 | Retrieve      | `GET`       | `/api/certificates/{id}/` |                                       |                                        |
 | Create (JSON) | `POST`      | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`| `file_upload` optional (multipart).    |
-| Create (file) | `POST`      | `/api/certificates/`      | multipart fields: `title`, `issuer`,  | Requires                               |
-                                                          | `date_earned`, `file_upload=@path`    |`Content-Type: multipart/form-data`.    |
+| Create (file) | `POST`      | `/api/certificates/`      | multipart fields: `title`, `issuer`,  `date_earned`, `file_upload=@path`   | Requires `Content-Type: multipart/form-data`.    |
 | Update        | `PUT/PATCH` | `/api/certificates/{id}/` | JSON or multipart                     |                                        |
 | Delete        | `DELETE`    | `/api/certificates/{id}/` | —                                     |                                        |
 
 
 **Projects**: Base: /api/projects/
 
-        * Filter: ?certificate=<id>&status=<planned|in_progress|completed>
-        * Search: ?search=<substring> (matches title, description)
-        * Ordering: ordering=date_created or ?ordering=-date_created (also title)
-        * Pagination: ?page=1
+* Filter: ?certificate=<id>&status=<planned|in_progress|completed>
+* Search: ?search=<substring> (matches title, description)
+* Ordering: ordering=date_created or ?ordering=-date_created (also title)
+* Pagination: ?page=1
 
-        * Default newest first (-date_created)
-        * Auto-description: If description is blank on create, BE generates one from guided fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
+* Default newest first (-date_created)
+* Auto-description: If description is blank on create, BE generates one from guided fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
 
 | Operation | Method      | URL                   | Body                                     | Notes                                           |
 | --------- | ----------- | --------------------- | ---------------------------------------- | ----------------------------------------------- |
@@ -256,12 +253,12 @@ Base URL (local): http://127.0.0.1:8000
         
 **Goals**: Base: /api/goals/
 
-        * Filter: ?deadline=<YYYY-MM-DD>
-        * Ordering: ?ordering=created_at or ?ordering=-created_at
-        * Pagination: ?page=1
+* Filter: ?deadline=<YYYY-MM-DD>
+* Ordering: ?ordering=created_at or ?ordering=-created_at
+* Pagination: ?page=1
 
-        * Default ordering: newest first (-created_at)
-        * Field: progress_percent Computed (read-only)
+* Default ordering: newest first (-created_at)
+* Field: progress_percent Computed (read-only)
 
 | Operation | Method      | URL                | Body                                | Notes                                        |
 | --------- | ----------- | ------------------ | ----------------------------------- | -------------------------------------------- |
