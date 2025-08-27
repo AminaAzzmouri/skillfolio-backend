@@ -11,7 +11,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - User authentication (register, login, logout, JWT)
 - Upload and manage certificates (PDF, with metadata: title, date, specialty)
 - CRUD for achievements
-- Link projects to certificates (with guided description form)
+- Link projects to certificates (with guided description form + auto-generated description from guided answers ✅)
 - Set and track learning goals (with deadlines, validations, and progress tracking ✅)
 - REST API endpoints for the frontend
 
@@ -29,7 +29,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 ## 📅 Project Timeline
 
 - Week 3: Django project setup + authentication
-- Week 4: Certificates & achievements models + APIs + Goals model + validations + computed progress
+- Week 4: Certificates & achievements models + APIs + Goals model + validations + computed progress + Project guided-questions → auto-description
 - Week 5: Testing, polish, deployment
 
 ---
@@ -280,7 +280,9 @@ Base: /api/projects/
 | List      | `GET`       | `/api/projects/`      | —                                        | Returns only the authenticated user’s projects. |
 | Retrieve  | `GET`       | `/api/projects/{id}/` | —                                        |                                                 |
 | Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate":| `certificate` is optional.                      |
-|           |             |                          <id or null> }`                         |                                                 |
+|           |             |                          <id or null> }`                         | ⚡ Auto-description: If `description` is blank  |
+                                                                                                the backend composes one from guided-question 
+                                                                                                fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
 | Update    | `PUT/PATCH` | `/api/projects/{id}/` | JSON                                     |                                                 |
 | Delete    | `DELETE`    | `/api/projects/{id}/` | —                                        |                                                 |
 
@@ -289,6 +291,8 @@ Base: /api/projects/
         - Search: ?search=dashboard (matches title, description)
         - Ordering: ?ordering=date_created or ?ordering=-date_created (also title)
         - Pagination: ?page=1
+
+
         
 **Goals**: 
 Base: /api/goals/
@@ -346,14 +350,44 @@ curl -X POST http://127.0.0.1:8000/api/certificates/ \
   -F "date_earned=2024-07-10" \
   -F "file_upload=@C:/path/to/file.pdf"
 
------------------------------------------------------------------------------------------------------------------------------------------------
+  -----------------------------------------------------------------------------------------------------------------------------------------------
   With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. Because the viewsets use OwnerScopedModelViewSet, each user sees only their own certificates/projects/goals.
   -----------------------------------------------------------------------------------------------------------------------------------------------
 
 # Filter projects by certificate
 curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
   -H "Authorization: Bearer <ACCESS_TOKEN>"
-  - You should only see your objects in list/detail views.
+  -> You should only see your objects in list/detail views.
+
+  -----------------------------------------------------------------------------------------------------------------------------------------------
+
+# How the auto-description works (quick sanity test)
+
+### Create (leave description blank; include guided answers):
+curl -X POST http://127.0.0.1:8000/api/projects/ \
+  -H "Authorization: Bearer token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Portfolio Dashboard",
+    "status": "completed",
+    "work_type": "team",
+    "duration_text": "2 weeks",
+    "primary_goal": "deliver_feature",
+    "problem_solved": "Visualize certificate progress in one place.",
+    "tools_used": "React, Django, DRF",
+    "skills_used": "React, Zustand, Tailwind",
+    "outcome_short": "Shipped a responsive dashboard showing live stats.",
+    "skills_to_improve": "Test coverage and CI"
+  }'
+
+### GET the created project and you should see a description like:
+“Portfolio Dashboard was a team project completed in 2 weeks. The main goal was 
+to deliver a functional feature. It addressed: Visualize certificate progress in 
+one place. Key tools/skills: React, Django, DRF, React, Zustand, Tailwind. Outcome: 
+Shipped a responsive dashboard showing live stats. Next, I plan to improve: Test 
+coverage and CI.”
+
+(If you provide `description` in POST/PUT, we keep the provided text.)
 
 -----------------------------------------------------------------------------------------------------------------------------------------------
 ℹ️ All list endpoints support pagination via ?page=N.
@@ -458,6 +492,26 @@ curl "http://127.0.0.1:8000/api/projects/?certificate=3" \
   - Filtering & search (e.g., ?certificate=<id>, ?status=completed, ?search=…)
   - Pagination (ensure FE reads results when pagination is enabled)
   
+---
+
+- **feature/project-guided-questions:**
+
+  **Purpose:** 
+    - Extend the Project model with guided-question fields and 
+    - implement backend auto-generation of project descriptions when left blank.
+
+  **Current Status:**
+
+  - Fields added: work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve
+  - Save() auto-generates description if missing, based on guided answers
+  - Admin updated to support new fields
+  - Tested successfully with curl (auto-description works)
+
+  **Next Steps:**:
+  - Ensure FE form provides guided answers
+  - Add Swagger/OpenAPI docs for new fields
+  - Polish generated text style and handle edge cases
+
 ---
 
 - **feature/user-goals:**
