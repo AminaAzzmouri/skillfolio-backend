@@ -24,6 +24,7 @@ Week 4 Enhancements
 - Goals API: still CRUD; progress is exposed via serializer (`progress_percent`).
 """
 
+# DRF ViewSets & Auth helpers for Skillfolio
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
@@ -43,20 +44,6 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     Allow clients to post {email, password} instead of {username, password}.
-
-    Why?
-    ----------------------------------------------------------------------------
-    By default, Django's auth uses "username". For a quick MVP with the default
-    User model, we simply treat the provided email as the username. This keeps
-    things simple until we decide to introduce a custom user model.
-
-    Behavior:
-    - If an "email" is provided and "username" is not, this serializer maps
-      email -> username before calling the parent validation.
-
-    Security:
-    - This still relies on SimpleJWT’s secure token issuance. Rate limiting and
-      brute-force protection can be added at the view or gateway layer later.
     """
     email = serializers.CharField(write_only=True, required=False)
 
@@ -70,10 +57,8 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 class EmailTokenObtainPairView(TokenObtainPairView):
     """
     POST /api/auth/login/
-    ----------------------------------------------------------------------------
-    Accepts JSON: {"email": "...", "password": "..."} or {"username": "...", "password": "..."} via a custom serializer that maps email → username), /api/auth/refresh/ to renew tokens, and /api/auth/register/ to create a user quickly.
-
-    These endpoints return { "refresh": "...", "access": "..." } tokens so the frontend can authenticate requests without a session cookie.
+    Accepts {"email": "...", "password": "..."} or {"username": "...", "password": "..."}.
+    Returns {"refresh": "...", "access": "..."}.
     """
     serializer_class = EmailTokenObtainPairSerializer
 
@@ -89,29 +74,13 @@ User = get_user_model()
 def register(request):
     """
     POST /api/auth/register/
-    ----------------------------------------------------------------------------
     Minimal registration helper for development.
-
-    Input JSON:
-      - email (required)
-      - password (required)
-
-    Behavior:
-      - Uses default Django User; stores email as both username and email.
-      - Returns created user's id/username/email on success.
-
-    Notes:
-      - No email verification or password validation here (MVP). We might consider adding:
-        * Django's password validators
-        * Email confirmation
-        * Unique email checks beyond username
     """
     email = request.data.get("email")
     password = request.data.get("password")
     if not email or not password:
         return Response({"detail": "email and password required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Default User requires "username". We use the email as username for MVP.
     if User.objects.filter(username=email).exists():
         return Response({"detail": "user already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -127,21 +96,9 @@ def register(request):
 # -----------------------------------------------------------------------------
 class OwnerScopedModelViewSet(viewsets.ModelViewSet):
     """
-    A reusable base class that:
-    ----------------------------------------------------------------------------
     - Requires authentication (IsAuthenticated).
     - Restricts all list/retrieve/update/delete operations to the current user.
     - Automatically assigns request.user on create.
-
-    Why?
-    ----------------------------------------------------------------------------
-    Ensures users only ever see and manage their own resources, without repeating
-    the same logic in each ViewSet.
-
-    Extend:
-      class MyViewSet(OwnerScopedModelViewSet):
-          queryset = MyModel.objects.all()
-          serializer_class = MySerializer
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -150,7 +107,6 @@ class OwnerScopedModelViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        # Inject the authenticated user
         serializer.save(user=self.request.user)
 
 
@@ -160,63 +116,45 @@ class OwnerScopedModelViewSet(viewsets.ModelViewSet):
 class CertificateViewSet(OwnerScopedModelViewSet):
     """
     Certificates API
-    ----------------------------------------------------------------------------
-    - List only the authenticated user's certificates.
-    - Create assigns the authenticated user automatically.
-    - Filtering/Search/Ordering support for FE list views.
-
-    Query params:
-      - filter:   ?issuer=<str>&date_earned=<YYYY-MM-DD>                              > filters by issuer/date
-      - search:   ?search=<substring>  (title, issuer)                                > searches title or issuer
-      - ordering: ?ordering=date_earned  or  ?ordering=-date_earned  (also "title")   > orders newest first
+    Filter:   ?issuer=<str>&date_earned=<YYYY-MM-DD>
+    Search:   ?search=<substring>  (title, issuer)
+    Ordering: ?ordering=date_earned | -date_earned | title | -title
     """
     queryset = Certificate.objects.all()
     serializer_class = CertificateSerializer
     filterset_fields = ["issuer", "date_earned"]
     search_fields = ["title", "issuer"]
     ordering_fields = ["date_earned", "title"]
+    # Default ordering if FE doesn't pass ?ordering=...
+    ordering = ["-date_earned"]
 
 
 class ProjectViewSet(OwnerScopedModelViewSet):
     """
     Projects API
-    ----------------------------------------------------------------------------
-    - List/create/update/delete projects owned by the authenticated user.
-    - Optionally link a project to a certificate (nullable FK).
-    - Guided answers are stored (work_type, duration_text, primary_goal,
-      challenges_short, skills_used, outcome_short, skills_to_improve).
-      If `description` is blank, the backend auto-generates it from these fields.
-    - Includes select_related('certificate') for efficient list queries.
-
-    Query params:
-      - filter:   ?certificate=<id> &/or ?status=<planned|in_progress|completed>
-      - search:   ?search=<substring>  (title, description, problem_solved, tools_used, impact)
-      - ordering: ?ordering=date_created  or  ?ordering=-date_created  (also "title")
+    Filter:   ?certificate=<id>&status=<planned|in_progress|completed>
+    Search:   ?search=<substring>  (title, description[, problem_solved, tools_used, impact if present])
+    Ordering: ?ordering=date_created | -date_created | title | -title
     """
     queryset = Project.objects.select_related("certificate").all()
     serializer_class = ProjectSerializer
-    filterset_fields = ["certificate", "status"]   # /api/projects/?certificate=<id>&status=<choice>
+    filterset_fields = ["certificate", "status"]
+    # Keep search minimal/robust (title/description) — include extras if your model has them:
     search_fields = ["title", "description", "problem_solved", "tools_used", "impact"]
     ordering_fields = ["date_created", "title"]
+    # Default: newest first
+    ordering = ["-date_created"]
 
 
 class GoalViewSet(OwnerScopedModelViewSet):
     """
     Goals API
-    ----------------------------------------------------------------------------
-    - Track user goals (e.g., target number of projects before a deadline).
-    - List/create/update/delete goals owned by the authenticated user.
-
-    Query params:
-      - filter:   ?deadline=<YYYY-MM-DD>                          > filters by deadline
-      - ordering: ?ordering=created_at or ?ordering=-created_at   > shows most recent first.
-
-    Week 4 ideas:
-      - Expose computed progress (% completed / target_projects) as a read-only
-        serializer field (implemented in serializer).
-      - Add validation to prevent past deadlines (still optional).
+    Filter:   ?deadline=<YYYY-MM-DD>
+    Ordering: ?ordering=created_at | -created_at
     """
     queryset = Goal.objects.all()
     serializer_class = GoalSerializer
     filterset_fields = ["deadline"]
     ordering_fields = ["created_at"]
+    # Default: most recent first
+    ordering = ["-created_at"]
