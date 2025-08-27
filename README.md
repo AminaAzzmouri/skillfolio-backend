@@ -76,7 +76,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      python manage.py makemigrations
      python manage.py migrate
 
-     The blacklist tables for logout are created here because 
+The blacklist tables for logout are created here because 
      rest_framework_simplejwt.token_blacklist is installed
 
 # 7. Run the server:
@@ -102,7 +102,7 @@ INSTALLED_APPS = [
 
 # 9. Install backend auth & integration deps: (JWT, CORS, filtering)
 (Already covered by requirements.txt; shown here for clarity)     
-     pip install djangorestframework-simplejwt django-cors-headers django-filter
+       pip install djangorestframework-simplejwt django-cors-headers django-filter
      
 ## For logout blacklist support:
        pip install "djangorestframework-simplejwt[token_blacklist]"
@@ -202,10 +202,12 @@ Base URL (local): http://127.0.0.1:8000
 | `/api/auth/refresh/`  | `POST`  | ❌   | Exchange refresh for a new access token.                                                    |
 
 
-    **Login body examples**:  { "email": "you@example.com", "password": "pass1234" }
-    - Or:                     { "username": "you@example.com", "password": "pass1234" }
+- Login body examples**:  
+          { "email": "you@example.com", "password": "pass1234" }
+- Or:     
+          { "username": "you@example.com", "password": "pass1234" }
 
-    - Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
+- Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
 
 
 **Certificates**:  Base: /api/certificates/
@@ -240,12 +242,9 @@ Base URL (local): http://127.0.0.1:8000
 | --------- | ----------- | --------------------- | ---------------------------------------- | ----------------------------------------------- |
 | List      | `GET`       | `/api/projects/`      | —                                        | Returns only the authenticated user’s projects. |
 | Retrieve  | `GET`       | `/api/projects/{id}/` | —                                        |                                                 |
-| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate":| `certificate` is optional.                      |
-|           |             |                          <id or null> }`                         | ⚡Auto-description: If `description` is blank   |
-                                                                                                the backend composes one from guided-question 
-                                                                                                fields (work_type, duration_text, primary_goal, 
-                                                                                                challenges_short, skills_used, outcome_short, 
-                                                                                                skills_to_improve).
+| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate": <id or null> }`| `certificate` is optional
+⚡Auto-description: If `description` is blank 
+the backend composes one from guided-question  fields (work_type, duration_text, primary_goal,  challenges_short, skills_used, outcome_short, skills_to_improve).   |                                                                                                
 | Update    | `PUT/PATCH` | `/api/projects/{id}/` | JSON                                     |                                                 |
 | Delete    | `DELETE`    | `/api/projects/{id}/` | —                                        |                                                 |
 
@@ -265,13 +264,11 @@ Base URL (local): http://127.0.0.1:8000
 | List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. |
                                                                                        Includes progress_percent.
 | Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                              |
-| Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`.                  |
-                                                                                       Validates positive target and future date.
+| Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`. Validates positive target and future date. |
 | Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                              |
 | Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                              |
 
 ---
-
 
 ## 📖 API Documentation (Swagger / drf-yasg)
 
@@ -318,45 +315,47 @@ python manage.py collectstatic --noinput  # (harmless; if STATIC configured)
 python manage.py migrate
 python manage.py runserver
 
-1) Register:
+# 1) Register:
+
             curl -X POST http://127.0.0.1:8000/api/auth/register/ \
             -H "Content-Type: application/json" \
             -d '{"email":"you@example.com","password":"pass1234"}'
   
-  -----------------------------------------------------------------------------------------------------------------------------------------------
-  Returns the new user’s id/username/email (email is used as the username).
-  -----------------------------------------------------------------------------------------------------------------------------------------------
+          Returns the new user’s id/username/email (email is used as the username).
+  
        
-2) Login → get access/refresh
+# 2) Login → get access/refresh
+
             curl -X POST http://127.0.0.1:8000/api/auth/login/ \
             -H "Content-Type: application/json" \
             -d '{"username":"you@example.com","password":"pass1234"}'
 
-  -----------------------------------------------------------------------------------------------------------------------------------------------
-  You’ll receive { "access": "...", "refresh": "..." }. 
-                access → short-lived token for Authorization headers.
-                refresh → longer-lived token you can use at /api/auth/refresh/.
+- You’ll receive { "access": "...", "refresh": "..." }. 
+* access → short-lived token for Authorization headers.
+* refresh → longer-lived token you can use at /api/auth/refresh/.
   
-   Use Authorization: Bearer <ACCESS_TOKEN> for protected endpoints.
+- Use Authorization: Bearer <ACCESS_TOKEN> for protected endpoints.
 
-  With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. 
+- With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. 
   Because the viewsets use OwnerScopedModelViewSet, each user sees only their own certificates/projects/goals.
-  -----------------------------------------------------------------------------------------------------------------------------------------------
 
-→ Renew when expired
+- Renew when expired
+
             curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
             -H "Content-Type: application/json" \
             -d '{"refresh":"YOUR_REFRESH_TOKEN"}'
 
-3) Certificates
+# 3) Certificates
 
 # Create (json)
+
             curl -X POST http://127.0.0.1:8000/api/certificates/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>" \
             -H "Content-Type: application/json" \
             -d '{"title":"Django Basics","issuer":"Coursera","date_earned":"2024-08-01"}'
 
 # Create with file
+
             curl -X POST http://127.0.0.1:8000/api/certificates/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>" \
             -F "title=ML Cert" \
@@ -365,43 +364,51 @@ python manage.py runserver
             -F "file_upload=@C:/path/to/file.pdf"
 
 # List (default = newest first)
+
             curl http://127.0.0.1:8000/api/certificates/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>"
 
 # Filter by issuer + date
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/certificates/?issuer=Coursera&date_earned=2025-08-01"
 
 # Search by title/issuer
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/certificates/?search=python"
 
 # Order oldest → newest
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/certificates/?ordering=date_earned"
 
 # Partial update (PATCH)
+
             curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
             -d '{"title":"Updated Title"}'
 
 # Full update (PUT)
+
             curl -X PUT http://127.0.0.1:8000/api/certificates/5/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
             -d '{"title":"New Title","issuer":"Udemy","date_earned":"2024-08-01"}'
 
 # PATCH file with multipart (optional)
+
             curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
             -H "Authorization: Bearer <ACCESS>" \
             -F "file_upload=@C:/path/to/new.pdf"
 
 # DELETE
+
             curl -X DELETE http://127.0.0.1:8000/api/certificates/5/ \
             -H "Authorization: Bearer <ACCESS>"
 
-4) Projects
+# 4) Projects
 
 # Create (leave description blank; include guided answers):
 
@@ -421,47 +428,51 @@ python manage.py runserver
               "skills_to_improve": "Test coverage and CI"
             }'
 
---------------------------------------------------------------------------------
-GET the created project and you should see a description like:
+- GET the created project and you should see a description like:
 
-“Portfolio Dashboard was a team project completed in 2 weeks. The main goal was 
-to deliver a functional feature. It addressed: Visualize certificate progress in 
-one place. Key tools/skills: React, Django, DRF, React, Zustand, Tailwind. Outcome: 
-Shipped a responsive dashboard showing live stats. Next, I plan to improve: Test 
-coverage and CI.”
+            “Portfolio Dashboard was a team project completed in 2 weeks. The main goal was 
+            to deliver a functional feature. It addressed: Visualize certificate progress in 
+            one place. Key tools/skills: React, Django, DRF, React, Zustand, Tailwind. Outcome: 
+            Shipped a responsive dashboard showing live stats. Next, I plan to improve: Test 
+            coverage and CI.”
 
-(If you provide `description` in POST/PUT, we keep the provided text.)
---------------------------------------------------------------------------------
+- (If you provide `description` in POST/PUT, we keep the provided text.)
 
 # List
+
             curl -H http://127.0.0.1:8000/api/projects/
             "Authorization: Bearer <ACCESS>"
 
------------------------------------------------------------------
--> You should only see your objects in list/detail views.
- ---------------------------------------------------------------
+
+- You should only see your objects in list/detail views.
 
 # Filter by certificate id
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?certificate=12"
 
 # Filter by status
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?status=completed"
 
 # Search title/description
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?search=dashboard"
 
 # Order oldest → newest
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?ordering=date_created"
 
 # Paginate
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?page=2"
 
 # Partial update: PATCH (status / guided fields / link a certificate):
+
             curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
@@ -473,6 +484,7 @@ coverage and CI.”
                }'
 
 # FULL update
+
             curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \curl -X PUT http://127.0.0.1:8000/api/projects/12/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
@@ -491,12 +503,14 @@ coverage and CI.”
                }'
 
 # Delete
+
             curl -X DELETE http://127.0.0.1:8000/api/projects/12/ \
             -H "Authorization: Bearer <ACCESS>"
 
-5) Goals
+# 5) Goals
     
 # Create
+
             url -X POST http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
@@ -504,40 +518,44 @@ coverage and CI.”
 
 
 # List Progress_percent for goal settings
+
             curl http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer ACCESS_TOKEN_HERE"
 
------------------------------------------------------------------------------------------------------------------------------------------------
-         → You should see:
-                            {
-                              "id": 3,
-                              "target_projects": 5,
-                              "deadline": "2025-12-31",
-                              "created_at": "2025-08-23T10:55:41Z",
-                              "progress_percent": 20.0,   // computed from completed projects
-                              "user": 1
-                            }
------------------------------------------------------------------------------------------------------------------------------------------------
+- You should see:
+            {
+               "id": 3,
+               "target_projects": 5,
+               "deadline": "2025-12-31",
+               "created_at": "2025-08-23T10:55:41Z",
+               "progress_percent": 20.0,   // computed from completed projects
+               "user": 1
+            }
 
 # Filter by deadline
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/goals/?deadline=2025-12-31"
 
 # Order oldest → newest
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/goals/?ordering=created_at"
 
 # Order oldest → newest
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?ordering=date_created"
 
 # Paginate
+
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?page=2"
 
 # Goal Settings validations
 
-    **Negative target:**
+- Negative target:
+
             curl -X POST http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
@@ -545,7 +563,8 @@ coverage and CI.”
 
             → Expected: {"target_projects": ["target_projects must be > 0."]}
 
-    **Past deadline:**
+- Past deadline:
+
             curl -X POST http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
@@ -554,49 +573,55 @@ coverage and CI.”
             → Expected: {"deadline": ["deadline cannot be in the past."]}
 
 # Partial Update
+
             curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
             -d '{"target_projects": 10}'
 
 # Full Update
+
             curl -X PUT http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
             -d '{"target_projects": 12, "deadline": "2025-12-31"}'
 
 # DELETE:
+
             curl -X DELETE http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>"
 
-6) Analytics
+# 6) Analytics
 
 # Summary counts
+
             curl -H "Authorization: Bearer <ACCESS>" 
             http://127.0.0.1:8000/api/analytics/summary/
  
             → Expected: {"certificates_count": 2, "projects_count": 5, "goals_count": 1}
 
 # Goals with progress
+
             curl -H "Authorization: Bearer <ACCESS>" 
             http://127.0.0.1:8000/api/analytics/goals-progress/
             
             → Expected:  [{"id": 3, "target_projects": 5, à"progress_percent": 40.0, ...}]
 
-7) Logout (refresh-token blacklist)
+# 7) Logout (refresh-token blacklist)
+
             curl -X POST http://127.0.0.1:8000/api/auth/logout/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>" \
             -H "Content-Type: application/json" \
             -d '{"refresh": "<REFRESH_TOKEN>"}'
             
-            → Expected:  {"detail":"Successfully logged out."}
+- Expected:  {"detail":"Successfully logged out."}
 
             - Try to refresh again with the same refresh -> should now fail
             curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
             -H "Content-Type: application/json" \
             -d '{"refresh":"<REFRESH_TOKEN>"}'
 
-            → Expected: 401/400 error (blacklisted): { "detail": "Invalid or expired refresh token." }
+- Expected: 401/400 error (blacklisted): { "detail": "Invalid or expired refresh token." }
 
 ---
 
