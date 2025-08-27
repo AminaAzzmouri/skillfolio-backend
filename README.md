@@ -63,10 +63,10 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      pip install django
 
 # 5. Install dependencies
-     - We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
+- We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
      pip install -r requirements.txt
 
-     - If you add/change packages, re-freeze:
+- If you add/change packages, re-freeze:
      pip freeze > requirements.txt
 
 # 5. Start the Django project:
@@ -94,14 +94,15 @@ The blacklist tables for logout are created here because
 
 #### Add 'users' to INSTALLED_APPS in settings.py:
 
-INSTALLED_APPS = [
-...,
-'rest_framework',
-'users', # <-- newly created app
-]
+     INSTALLED_APPS = [
+     ...,
+     'rest_framework',
+     'users', # <-- newly created app
+     ]
 
 # 9. Install backend auth & integration deps: (JWT, CORS, filtering)
 (Already covered by requirements.txt; shown here for clarity)     
+
        pip install djangorestframework-simplejwt django-cors-headers django-filter
      
 ## For logout blacklist support:
@@ -242,9 +243,7 @@ Base URL (local): http://127.0.0.1:8000
 | --------- | ----------- | --------------------- | ---------------------------------------- | ----------------------------------------------- |
 | List      | `GET`       | `/api/projects/`      | —                                        | Returns only the authenticated user’s projects. |
 | Retrieve  | `GET`       | `/api/projects/{id}/` | —                                        |                                                 |
-| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate": <id or null> }`| `certificate` is optional
-⚡Auto-description: If `description` is blank 
-the backend composes one from guided-question  fields (work_type, duration_text, primary_goal,  challenges_short, skills_used, outcome_short, skills_to_improve).   |                                                                                                
+| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate": <id or null> }`| `certificate` is optional, ⚡Auto-description: If `description` is blank, the backend composes one from guided-question  fields (work_type, duration_text, primary_goal,  challenges_short, skills_used, outcome_short, skills_to_improve).   |                                                                                                
 | Update    | `PUT/PATCH` | `/api/projects/{id}/` | JSON                                     |                                                 |
 | Delete    | `DELETE`    | `/api/projects/{id}/` | —                                        |                                                 |
 
@@ -261,8 +260,7 @@ the backend composes one from guided-question  fields (work_type, duration_text,
 
 | Operation | Method      | URL                | Body                                | Notes                                        |
 | --------- | ----------- | ------------------ | ----------------------------------- | -------------------------------------------- |
-| List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. |
-                                                                                       Includes progress_percent.
+| List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. Includes progress_percent. |
 | Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                              |
 | Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`. Validates positive target and future date. |
 | Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                              |
