@@ -1,13 +1,16 @@
 """
 users/views.py — DRF ViewSets & Auth helpers for Skillfolio
 
+
 Purpose
 ===============================================================================
 Expose authenticated CRUD APIs for Certificate, Project, and Goal models,
 and provide minimal JWT-based authentication endpoints tailored for email login.
 
+
 Each get_queryset() filters objects by user=self.request.user, and perform_create() automatically assigns the currently authenticated user.
 This means every CRUD operation you perform via /api/certificates/, /api/projects/ or /api/goals/ will only show or modify data belonging to the logged-in user, and nothing else.
+
 
 Highlights
 - Email-based JWT login (posts {email, password}, internally mapped to username).
@@ -17,11 +20,18 @@ Highlights
     * Automatically assigns user on create.
 - Filtering/Search/Ordering enabled for FE integration (DRF + django-filter).
 
+
 Week 4 Enhancements
 -------------------------------------------------------------------------------
 - Projects API: now exposes `status` and guided fields; adds filtering by `status`
   and retains optional filtering by `certificate`.
 - Goals API: still CRUD; progress is exposed via serializer (`progress_percent`).
+
+Week 5 Additions (feature/analytics-endpoints)
+-------------------------------------------------------------------------------
+- New Analytics endpoints (owner-scoped):
+    * GET /api/analytics/summary/ → { certificates_count, projects_count, goals_count }
+    * GET /api/analytics/goals-progress/ → list of current user’s goals, each including computed `progress_percent`
 """
 
 # DRF ViewSets & Auth helpers for Skillfolio
@@ -158,3 +168,43 @@ class GoalViewSet(OwnerScopedModelViewSet):
     ordering_fields = ["created_at"]
     # Default: most recent first
     ordering = ["-created_at"]
+
+
+# -----------------------------------------------------------------------------
+# Analytics Endpoints (feature/analytics-endpoints)
+# -----------------------------------------------------------------------------
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def analytics_summary(request):
+    """
+    GET /api/analytics/summary/
+    Owner-scoped counts for the current authenticated user.
+
+    Response:
+      {
+        "certificates_count": <int>,
+        "projects_count": <int>,
+        "goals_count": <int>
+      }
+    """
+    user = request.user
+    data = {
+        "certificates_count": Certificate.objects.filter(user=user).count(),
+        "projects_count": Project.objects.filter(user=user).count(),
+        "goals_count": Goal.objects.filter(user=user).count(),
+    }
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def analytics_goals_progress(request):
+    """
+    GET /api/analytics/goals-progress/
+    Owner-scoped list of goals for the current user.
+    Each item includes `progress_percent` from GoalSerializer.
+    """
+    qs = Goal.objects.filter(user=request.user).order_by("-created_at")
+    # Pass request in context so serializer can compute progress based on the current user
+    ser = GoalSerializer(qs, many=True, context={"request": request})
+    return Response(ser.data, status=status.HTTP_200_OK)

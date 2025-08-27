@@ -679,6 +679,20 @@ coverage and CI.”
   - Optional explicit object-level permission class if you want an extra belt-and-suspenders check.
 ---
 
+- **feature/analytics-endpoints:**
+
+  **Purpose:** 
+
+  **Current Status:**
+
+  - Goals: 
+
+  **Next Steps:**
+
+  - 
+
+---
+
 - **fix/<fix-name>:** Bug fixes
 
 ---
