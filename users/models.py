@@ -1,44 +1,22 @@
 """
-models.py — Core data models for Skillfolio (backend)
+models.py — Core domain models for Skillfolio
 
 Purpose
 ===============================================================================
-This module defines the core domain models behind Skillfolio’s learning tracker:
-- Certificate: proofs of learning (optionally with uploaded files).
-- Project: practical work optionally linked to a Certificate.
-- Goal: lightweight planning (e.g., “finish 5 projects by a deadline”).
+Capture learning artifacts and progress for each user:
+- Certificate: proof of learning (metadata + optional uploaded file)
+- Project: practical work (optionally linked to a Certificate)
+- Goal: a lightweight target (e.g., “finish 5 projects by a date”)
 
-Auth Model
--------------------------------------------------------------------------------
-We use Django’s built-in `User` for authentication to keep things simple.
-If we ever need to extend profile data (bio, avatar, etc.), we can add a
-`Profile` model with OneToOne to `User` or switch to a custom user model.
+Auth model
+- Uses Django's built-in User for simplicity. If profile fields are needed later,
+  add a Profile model (OneToOne to User) or switch to a custom user model.
 
-General Notes
--------------------------------------------------------------------------------
-- All models are **user-scoped** (FK to `User`) to make per-user filtering and
-  permissions straightforward.
-- File uploads for certificates are stored under MEDIA_ROOT/certificates/.
-- Timestamps use `auto_now_add=True` to capture creation time where useful.
-
-Week 4 Enhancements
--------------------------------------------------------------------------------
-- Certificate: server-side validations for date_earned (no future dates) and
-  uploaded file (type/size).
-
-- Project: 
-        * added `status` (planned / in_progress / completed) 
-        * added *guided question* fields used to **auto-generate** a polished
-          description on the server if `description` is blank:
-                - work_type (individual/team)
-                - duration_text (short free text)
-                - primary_goal (practice_skill/deliver_feature/build_demo/solve_problem)
-                - challenges_short, skills_used, outcome_short, skills_to_improve (short texts)
-          > On save(), if `description` is empty, we compose it from the guided fields
-            (user can still edit/override on the next updates).
-
-- Goal: compute progress later at the serializer level (percentage of completed
-  projects vs target_projects).
+Design notes
+- All models are user-scoped (FK to User) which makes per-user filtering simple
+  and safely enforces ownership in the API layer.
+- Timestamps use auto_now_add where helpful to audit creation time.
+- Certificate uploads are stored under MEDIA_ROOT/certificates/.
 """
 
 from django.db import models
@@ -48,11 +26,11 @@ from django.core.validators import FileExtensionValidator
 from datetime import date
 
 
-# -----------------------------
-# Helpers / validators (inline)
-# -----------------------------
+# -----------------------------------------------------------------------------
+# Helpers / Validators
+# -----------------------------------------------------------------------------
 def validate_file_size_5mb(f):
-    """Restrict uploads to <= 5 MB."""
+    """Reject files larger than 5 MB to keep uploads reasonable."""
     max_bytes = 5 * 1024 * 1024
     if f and getattr(f, "size", 0) > max_bytes:
         raise ValidationError("File too large (max 5 MB).")
@@ -62,33 +40,24 @@ class Certificate(models.Model):
     """
     Certificate
     =============================================================================
-    Purpose
-    ---------------------------------------------------------------------------
-    Represents a verified learning achievement (e.g., a course completion).
-    Stores issuer metadata and an optional uploaded file (PDF/image).
+    Represents a course completion or credential.
 
     Relationships
-    ---------------------------------------------------------------------------
-    - user: the owner of the certificate (FK to `auth.User`).
-    - projects: reverse relation from Project → Certificate (related_name="projects").
+    - user: owner of the record
+    - projects: reverse FK from Project (related_name="projects")
 
-    Key Fields
-    ---------------------------------------------------------------------------
-    - title (CharField): The certificate name (e.g., “Django Basics”).
-    - issuer (CharField): Who issued it (e.g., Coursera, Udacity).
-    - date_earned (DateField): When the certificate was earned.
-    - file_upload (FileField, optional): The uploaded proof, saved to "certificates/".
+    Fields
+    - title: Name of the certificate
+    - issuer: Organization/platform that issued it
+    - date_earned: When it was achieved
+    - file_upload: Optional PDF/image proof
 
-    Behavior
-    ---------------------------------------------------------------------------
-    - __str__: readable representation "Title - Issuer".
-    - clean(): validates that date_earned is not in the future.
+    Validation
+    - clean(): disallows future dates for date_earned
+    - file type/size enforced via validators
 
-    Future Enhancements
-    ---------------------------------------------------------------------------
-    - Extra fields: certificate_id/code, specialization/track, skill tags.
-    - Indexes: add indexes if we’ll filter heavily by issuer or date_earned.
-    
+    Tips
+    - Consider adding fields like external ID or skill tags if needed later.
     """
 
     user = models.ForeignKey(
@@ -98,7 +67,7 @@ class Certificate(models.Model):
         help_text="Owner of this certificate.",
     )
     title = models.CharField(max_length=255, help_text="Certificate title.")
-    issuer = models.CharField(max_length=255, help_text="Organization/platform that issued the certificate.")
+    issuer = models.CharField(max_length=255, help_text="Issuing organization/platform.")
     date_earned = models.DateField(help_text="Date when the certificate was earned.")
     file_upload = models.FileField(
         upload_to="certificates/",
@@ -112,12 +81,12 @@ class Certificate(models.Model):
     )
 
     class Meta:
-        ordering = ["-date_earned"]  # Show most recent certificates first
+        ordering = ["-date_earned"]  # newest certificates first
         verbose_name = "Certificate"
-        verbose_name_plural = "Certificates"  # Makes admin interface cleaner.
+        verbose_name_plural = "Certificates"
 
     def clean(self):
-        # Prevent future dates for earned certificates
+        """Prevent future dates for earned certificates."""
         if self.date_earned and self.date_earned > date.today():
             raise ValidationError({"date_earned": "date_earned cannot be in the future."})
 
@@ -129,27 +98,25 @@ class Project(models.Model):
     """
     Project
     =============================================================================
-    Purpose
-    ---------------------------------------------------------------------------
-    Captures practical work a user completed. A project can optionally be linked
-    to a specific Certificate to show how learning was applied.
-    ...
+    Practical work a user completed; may be linked to a Certificate to connect
+    learning to outcomes. Supports guided fields to help generate a clear
+    description if the author leaves it blank.
+
     Key Fields
-    ---------------------------------------------------------------------------
-    - title (CharField): Project name.
-    - status (CharField): planned / in_progress / completed (added Week 4).
-    - work_type (CharField, choices: individual/team)
-    - duration_text (CharField): short human-readable duration (e.g., "2 weeks")
-    - primary_goal (CharField, choices: practice_skill/deliver_feature/build_demo/solve_problem)
-    - tools_used (TextField): guided description field
-    - skills_practiced (TextField)
-    - problem_solved (TextField): guided description field
-    - challenges_short (TextField)
-    - outcome_short (TextField)
-    - skills_to_improve (TextField)
-    - description (TextField): Details (what, how, tools, impact).
-    - date_created (DateTimeField auto_now_add): Creation timestamp.
+    - title: Name of the project
+    - status: planned / in_progress / completed
+    - work_type: individual or team
+    - duration_text: short, human-readable duration (“2 weeks”, “weekend”)
+    - primary_goal: practice_skill / deliver_feature / build_demo / solve_problem
+    - certificate: optional FK to a related Certificate
+    - description: narrative (auto-generated if left blank)
+    - date_created: timestamp (auto)
+
+    Guided fields (used for auto-description; all optional)
+    - tools_used, skills_used, problem_solved, challenges_short,
+      outcome_short, skills_to_improve
     """
+
     STATUS_PLANNED = "planned"
     STATUS_IN_PROGRESS = "in_progress"
     STATUS_COMPLETED = "completed"
@@ -167,13 +134,13 @@ class Project(models.Model):
     )
     title = models.CharField(max_length=255, help_text="Project title.")
 
-    # Week 4 additions:
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_PLANNED,
         help_text="Current status of the project.",
     )
+
     WORK_INDIVIDUAL = "individual"
     WORK_TEAM = "team"
     WORK_TYPE_CHOICES = [
@@ -187,7 +154,7 @@ class Project(models.Model):
         null=True,
         help_text="Was this an individual or team project?"
     )
-    # Week 4.5 guided questions (stored as raw answers; used to auto-build description)
+
     duration_text = models.CharField(
         max_length=100,
         blank=True,
@@ -212,6 +179,7 @@ class Project(models.Model):
         null=True,
         help_text="The main intent behind this project."
     )
+
     certificate = models.ForeignKey(
         Certificate,
         on_delete=models.SET_NULL,
@@ -220,6 +188,7 @@ class Project(models.Model):
         related_name="projects",
         help_text="Optionally link this project to a certificate.",
     )
+
     tools_used = models.TextField(
         blank=True,
         help_text="(Optional) Which tools/technologies did you use?"
@@ -237,24 +206,24 @@ class Project(models.Model):
     date_created = models.DateTimeField(auto_now_add=True, help_text="When this project was created.")
 
     class Meta:
-        ordering = ["-date_created"]  # Recent-first ordering
+        ordering = ["-date_created"]  # recent-first
         verbose_name = "Project"
-        verbose_name_plural = "Projects"  # Makes admin interface cleaner.
+        verbose_name_plural = "Projects"
 
     def __str__(self):
         return self.title
 
-    # -----------------------------
-    # Auto-generate description
-    # -----------------------------
+    # -----------------------------------------------------------------------------
+    # Auto-generate description from guided answers when empty
+    # -----------------------------------------------------------------------------
     def _generated_description(self) -> str:
         """
-        Build a concise, polished description from guided answers.
-        Only uses fields that are present; keeps it readable.
+        Build a concise description using any guided fields that are present.
+        This makes the record readable even when the author leaves description blank.
         """
         bits = []
 
-        # Opening line
+        # Opening line with role and/or duration if available
         opening = f"{self.title}".strip() if self.title else "This project"
         role = None
         if self.work_type == self.WORK_INDIVIDUAL:
@@ -272,7 +241,7 @@ class Project(models.Model):
         else:
             bits.append(f"{opening}.")
 
-        # Primary goal
+        # Primary goal (human phrasing)
         goal_map = {
             self.GOAL_PRACTICE: "practice and strengthen key skills",
             self.GOAL_DELIVER: "deliver a functional feature",
@@ -286,7 +255,7 @@ class Project(models.Model):
         if self.problem_solved:
             bits.append(f"It addressed: {self.problem_solved.strip()}")
 
-        # Tools used / skills
+        # Tools / skills
         tools = []
         if self.tools_used:
             tools.append(self.tools_used.strip())
@@ -295,13 +264,13 @@ class Project(models.Model):
         if tools:
             bits.append(f"Key tools/skills: {', '.join(tools)}.")
 
-        # Outcome
+        # Outcome (prefer outcome_short; keep fallback for legacy/alt fields)
         if self.outcome_short:
             bits.append(f"Outcome: {self.outcome_short.strip()}")
-        elif self.impact:
+        elif hasattr(self, "impact") and self.impact:  # guard for optional/legacy field
             bits.append(f"Impact: {self.impact.strip()}")
 
-        # Reflection
+        # Reflection / next steps
         if self.skills_to_improve:
             bits.append(f"Next, I plan to improve: {self.skills_to_improve.strip()}.")
 
@@ -309,8 +278,9 @@ class Project(models.Model):
 
     def save(self, *args, **kwargs):
         """
-        If the client left `description` blank, auto-generate it from the guided
-        answers. If description is provided, we keep the user's text.
+        On save:
+        - If `description` is blank/whitespace, compose one from the guided fields.
+        - If `description` already has content, we respect the author's text.
         """
         if not self.description or not self.description.strip():
             self.description = self._generated_description()
@@ -321,31 +291,19 @@ class Goal(models.Model):
     """
     Goal
     =============================================================================
-    Purpose
-    ---------------------------------------------------------------------------
-    Lightweight planning tool for a user to set targets (e.g., “Build 5 projects
-    by 2025-12-31”).
+    A simple target like “complete 5 projects by YYYY-MM-DD”.
 
-    Relationships
-    ---------------------------------------------------------------------------
-    - user: the owner of the goal.
+    Fields
+    - target_projects: positive integer target
+    - deadline: date by which the target should be met
+    - created_at: timestamp when the goal was created
 
-    Key Fields
-    ---------------------------------------------------------------------------
-    - target_projects (IntegerField): Numeric target to hit.
-    - deadline (DateField): When the target should be achieved by.
-    - created_at (DateTimeField auto_now_add): Goal creation timestamp.
+    Validation
+    - clean(): ensures a positive target and non-past deadline
 
-    Behavior
-    ---------------------------------------------------------------------------
-    - __str__: human-friendly summary.
-
-    Future Enhancements
-    ---------------------------------------------------------------------------
-    - Validation: ensure deadline is not in the past.
-    - Computed progress: percentage of user.projects completed vs target_projects.
-    - Status: not_started / on_track / at_risk / achieved.
-    
+    Notes
+    - Progress percentage is computed in the serializer based on the user's
+      number of completed projects relative to target_projects.
     """
 
     user = models.ForeignKey(
@@ -354,19 +312,21 @@ class Goal(models.Model):
         related_name="goals",
         help_text="Owner of this goal.",
     )
-    target_projects = models.IntegerField(help_text="How many projects the user aims to complete.")
-    deadline = models.DateField(help_text="Deadline for completing the target.")
-    created_at = models.DateTimeField(auto_now_add=True, help_text="When this goal was created.")
-
+    target_projects = models.IntegerField(help_text="Number of projects to complete.")
+    deadline = models.DateField(help_text="Target deadline.")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
 
     class Meta:
-        ordering = ["deadline"]  # Goals listed by upcoming deadlines
+        ordering = ["deadline"]
         verbose_name = "Goal"
-        verbose_name_plural = "Goals"  # Makes admin interface cleaner.
-
+        verbose_name_plural = "Goals"
 
     def clean(self):
-        # Server-side data integrity: positive target & non-past deadline
+        """
+        Ensure data integrity:
+        - target_projects must be a positive integer
+        - deadline cannot be in the past
+        """
         from datetime import date as _date
         errors = {}
         if self.target_projects is None or self.target_projects <= 0:
@@ -377,7 +337,5 @@ class Goal(models.Model):
             from django.core.exceptions import ValidationError
             raise ValidationError(errors)
 
-
     def __str__(self):
         return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
-

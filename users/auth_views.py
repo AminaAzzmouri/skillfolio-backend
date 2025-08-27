@@ -1,24 +1,26 @@
 """
-users/auth_views.py — JWT Auth helpers for Skillfolio
+users/auth_views.py — JWT auth helpers for Skillfolio
 
 Purpose
 ===============================================================================
-Centralizes all authentication-related views:
-- Login (email-based JWT: {email,password} or {username,password})
-- Register (simple dev helper)
-- Logout (blacklist refresh token so it can't be reused)
+Provide a focused module for authentication endpoints:
+- Login (JWT pair, email or username accepted)
+- Register (simple dev helper; not a full signup flow)
+- Logout (blacklist a submitted refresh token to invalidate future use)
 
-Why this file?
--------------------------------------------------------------------------------
-Keeps auth code isolated from resource ViewSets to avoid mixing concerns with
-domain logic (certificates/projects/goals/analytics).
+Why a dedicated file?
+- Keeps auth concerns separate from domain ViewSets (certificates/projects/goals),
+  making each module easier to reason about and test.
 
-Endpoints
--------------------------------------------------------------------------------
-POST /api/auth/login/      → returns {access, refresh}
-POST /api/auth/refresh/    → (wired in urls.py via SimpleJWT)
-POST /api/auth/register/   → creates a basic Django user (email-as-username)
-POST /api/auth/logout/     → blacklists the provided refresh token
+Endpoints (wired in root urls.py)
+- POST /api/auth/login/    → returns {"access": "...", "refresh": "..."}
+- POST /api/auth/refresh/  → (SimpleJWT's refresh view, see urls.py)
+- POST /api/auth/register/ → create a Django user (email-as-username)
+- POST /api/auth/logout/   → blacklist the provided refresh token
+
+Security Notes
+- Logout requires SimpleJWT blacklist tables; ensure
+  'rest_framework_simplejwt.token_blacklist' is in INSTALLED_APPS and migrations run.
 """
 
 from django.contrib.auth import get_user_model
@@ -32,18 +34,17 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-# -------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Email-based login
-# -------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
-    Allow clients to post {email, password} instead of {username, password}.
+    Accept {email, password} as an alternative to {username, password}.
 
-    Behavior:
-      - If "email" is provided and "username" is not, we map email → username
-        to work with Django's default User model.
-    Security:
-      - Relies on SimpleJWT for token issuance; add rate limiting at gateway later.
+    How it works
+    - If the payload includes "email" and not "username", we copy email → username.
+    - This matches Django's default User model which authenticates by "username".
+    - Token issuance and validation remain handled by SimpleJWT.
     """
     email = serializers.CharField(write_only=True, required=False)
 
@@ -57,24 +58,29 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
 class EmailTokenObtainPairView(TokenObtainPairView):
     """
     POST /api/auth/login/
-    Accepts {"email": "...", "password": "..."} OR {"username": "...", "password": "..."}.
-    Returns {"refresh": "...", "access": "..."} on success.
+    Body: {"email": "...", "password": "..."} OR {"username": "...", "password": "..."}
+    Response: {"refresh": "...", "access": "..."}
     """
     serializer_class = EmailTokenObtainPairSerializer
 
 
-# -------------------------------------------------------------------
-# Register (dev helper) — minimal; add validation/verification in prod
-# -------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Register (development helper)
+# -----------------------------------------------------------------------------
 User = get_user_model()
+
 
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def register(request):
     """
     POST /api/auth/register/
-    Body: {"email": "...", "password": "..."}
-    Creates a Django user with email stored as both username and email.
+    Body: {"email": "<str>", "password": "<str>"}
+
+    Behavior
+    - Creates a Django user using the supplied email as both username and email.
+    - Returns a minimal representation suitable for local development.
+    - In production, add email verification, password strength checks, etc.
     """
     email = request.data.get("email")
     password = request.data.get("password")
@@ -91,27 +97,26 @@ def register(request):
     )
 
 
-# -------------------------------------------------------------------
-# Logout (blacklist refresh token)
-# -------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Logout (server-side invalidation via refresh-token blacklist)
+# -----------------------------------------------------------------------------
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def logout(request):
     """
     POST /api/auth/logout/
-    Expects JSON body: { "refresh": "<refresh_token>" }
+    Body: {"refresh": "<refresh_token>"}
 
-    What it does:
-      - Blacklists the submitted refresh token so it can no longer be used
-        to obtain new access tokens (server-side logout).
+    What this does
+    - Takes the submitted refresh token and blacklists it.
+    - Once blacklisted, that refresh token cannot be used to mint new access tokens.
 
-    Returns:
-      - 205 Reset Content on success
-      - 400 Bad Request if the token is missing/invalid
+    Returns
+    - 205 Reset Content and {"detail": "..."} when successful
+    - 400 Bad Request if the token is missing or invalid
 
-    Notes:
-      - You must install and enable 'rest_framework_simplejwt.token_blacklist'
-        in INSTALLED_APPS and run migrations for this to work.
+    Requirements
+    - 'rest_framework_simplejwt.token_blacklist' must be installed and migrated.
     """
     try:
         refresh_token = request.data.get("refresh")

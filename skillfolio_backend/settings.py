@@ -3,27 +3,19 @@ settings.py — Django project configuration for Skillfolio Backend
 
 Purpose
 ===============================================================================
-Central configuration file that controls how Django behaves:
-- Installed apps
-- Middleware
-- REST framework (auth, permissions, filters, pagination)
-- Database settings
-- Media & static files
-- Internationalization
-- Security-related options
+Centralize framework configuration:
+- Apps, middleware, DB, REST framework, JWT auth, CORS, i18n, static/media
 
-This file is critical to ensure the backend runs properly and integrates
-with the frontend (via JWT + CORS).
+Key Integrations
+- REST framework defaults: authentication, permissions, filtering, pagination
+- SimpleJWT for stateless auth (access + refresh tokens)
+- SimpleJWT blacklist app to invalidate refresh tokens on logout
+- drf-yasg for Swagger UI and OpenAPI schema
+- CORS middleware for FE ↔ BE development
 
-Week 4 Notes
--------------------------------------------------------------------------------
-- Models/serializers/admin were enhanced; settings itself remains valid.
-- If you later add JWT Blacklist or Swagger, we’ll update INSTALLED_APPS/URLs.
-
-Week 5 Update (feature/auth-logout-blacklist)
--------------------------------------------------------------------------------
-- Enabled `rest_framework_simplejwt.token_blacklist` to support blacklisting
-  refresh tokens on logout (server-side invalidation).
+Security
+- Never commit real production secrets to version control.
+- For production, restrict CORS and configure a hardened DB.
 """
 
 from pathlib import Path
@@ -31,13 +23,13 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ⚠️ Never commit a real secret key in production
+# ⚠️ Replace with a real secret in production
 SECRET_KEY = 'django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z'
 DEBUG = True
 ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
-    # Django core apps
+    # Django core
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -45,19 +37,19 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Third-party apps
+    # Third-party
     'rest_framework',
     'corsheaders',
-    'django_filters',      # required for DRF filter backends
-    'drf_yasg',
-    'rest_framework_simplejwt.token_blacklist',  # <-- NEW: enable refresh token blacklist
+    'django_filters',                             # filtering backend for DRF
+    'drf_yasg',                                   # Swagger/OpenAPI docs
+    'rest_framework_simplejwt.token_blacklist',   # refresh-token blacklist
 
     # Local apps
     'users',
 ]
 
 MIDDLEWARE = [
-    # CORS middleware should be as high as possible
+    # CORS should be as high as possible
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
 
@@ -83,16 +75,16 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
-    # (Optional) FE sugar:
+    # Optionally rename query params for FE sugar:
     # "SEARCH_PARAM": "search",
     # "ORDERING_PARAM": "ordering",
 }
 
-# JWT lifetimes (dev-friendly). Blacklist support is enabled via installed app.
+# JWT lifetimes (dev-friendly defaults)
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=6),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    # If you later enable token rotation, you can also set:
+    # If you later enable rotation:
     # "ROTATE_REFRESH_TOKENS": True,
     # "BLACKLIST_AFTER_ROTATION": True,
 }
@@ -103,7 +95,8 @@ WSGI_APPLICATION = 'skillfolio_backend.wsgi.application'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],   # add template dirs if you start using server-side rendering
+        # Add template dirs here if you adopt server-side HTML rendering
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -116,7 +109,7 @@ TEMPLATES = [
     },
 ]
 
-# SQLite for development (switch to Postgres/MySQL in production)
+# SQLite for development; switch to Postgres/MySQL in production
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -144,5 +137,5 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Dev CORS (lock down in prod)
+# Dev CORS (lock down in production)
 CORS_ALLOW_ALL_ORIGINS = True

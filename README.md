@@ -150,15 +150,14 @@ INSTALLED_APPS = [
 * /api/analytics/summary/ → counts of certificates, projects, goals
 * /api/analytics/goals-progress/ → list of goals with progress
 
+# Docs
+* Swagger docs now working (/api/docs/).
 ---
 
 ## 🔮 What’s Next
 
 # Permissions (nice to have): 
 Optional object-level permission class (extra belt-and-suspenders; current owner scoping via queryset is already enforced).
-
-# Docs: 
-Swagger/OpenAPI schema generation (drf-yasg) for public API docs.
 
 # Frontend polish support:
 - Project edit/delete flows
