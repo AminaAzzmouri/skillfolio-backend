@@ -137,17 +137,18 @@ class Project(models.Model):
     Key Fields
     ---------------------------------------------------------------------------
     - title (CharField): Project name.
-    - description (TextField): Details (what, how, tools, impact).
     - status (CharField): planned / in_progress / completed (added Week 4).
-    - problem_solved/tools_used/impact (TextFields): guided description fields (Week 4).
-    - date_created (DateTimeField auto_now_add): Creation timestamp.
-
-    Week 4.5 additions (guided questions → auto description)
-    ---------------------------------------------------------------------------
     - work_type (CharField, choices: individual/team)
     - duration_text (CharField): short human-readable duration (e.g., "2 weeks")
     - primary_goal (CharField, choices: practice_skill/deliver_feature/build_demo/solve_problem)
-    - challenges_short / skills_used / outcome_short / skills_to_improve (TextFields)
+    - tools_used (TextField): guided description field
+    - skills_practiced (TextField)
+    - problem_solved (TextField): guided description field
+    - challenges_short (TextField)
+    - outcome_short (TextField)
+    - skills_to_improve (TextField)
+    - description (TextField): Details (what, how, tools, impact).
+    - date_created (DateTimeField auto_now_add): Creation timestamp.
     """
     STATUS_PLANNED = "planned"
     STATUS_IN_PROGRESS = "in_progress"
@@ -164,16 +165,7 @@ class Project(models.Model):
         related_name="projects",
         help_text="Owner of this project.",
     )
-    certificate = models.ForeignKey(
-        Certificate,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="projects",
-        help_text="Optionally link this project to a certificate.",
-    )
     title = models.CharField(max_length=255, help_text="Project title.")
-    description = models.TextField(help_text="What you built, how, tools used, and impact.", blank=True)
 
     # Week 4 additions:
     status = models.CharField(
@@ -182,20 +174,6 @@ class Project(models.Model):
         default=STATUS_PLANNED,
         help_text="Current status of the project.",
     )
-    problem_solved = models.TextField(
-        blank=True,
-        help_text="(Optional) What problem did this project solve?"
-    )
-    tools_used = models.TextField(
-        blank=True,
-        help_text="(Optional) Which tools/technologies did you use?"
-    )
-    impact = models.TextField(
-        blank=True,
-        help_text="(Optional) What was the outcome or impact?"
-    )
-
-    # Week 4.5 guided questions (stored as raw answers; used to auto-build description)
     WORK_INDIVIDUAL = "individual"
     WORK_TEAM = "team"
     WORK_TYPE_CHOICES = [
@@ -209,6 +187,7 @@ class Project(models.Model):
         null=True,
         help_text="Was this an individual or team project?"
     )
+    # Week 4.5 guided questions (stored as raw answers; used to auto-build description)
     duration_text = models.CharField(
         max_length=100,
         blank=True,
@@ -233,10 +212,27 @@ class Project(models.Model):
         null=True,
         help_text="The main intent behind this project."
     )
-    challenges_short = models.TextField(blank=True, null=True, help_text="Key challenges faced (short).")
+    certificate = models.ForeignKey(
+        Certificate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="projects",
+        help_text="Optionally link this project to a certificate.",
+    )
+    tools_used = models.TextField(
+        blank=True,
+        help_text="(Optional) Which tools/technologies did you use?"
+    )
     skills_used = models.TextField(blank=True, null=True, help_text="Skills/tools used (CSV or short text).")
-    outcome_short = models.TextField(blank=True, null=True, help_text="Concise outcome/impact.")
+    problem_solved = models.TextField(
+        blank=True,
+        help_text="(Optional) What problem did this project solve?"
+    )
+    challenges_short = models.TextField(blank=True, null=True, help_text="Key challenges faced (short).")
+    outcome_short = models.TextField(blank=True, null=True, help_text="(Optional) What was the outcome or impact?")
     skills_to_improve = models.TextField(blank=True, null=True, help_text="What to practice more next time.")
+    description = models.TextField(help_text="What you built, how, tools used, and impact.", blank=True)
 
     date_created = models.DateTimeField(auto_now_add=True, help_text="When this project was created.")
 
