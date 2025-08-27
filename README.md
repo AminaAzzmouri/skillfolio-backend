@@ -467,7 +467,14 @@ coverage and CI.”
             -d '{"refresh": "<REFRESH_TOKEN>"}'
             
             → Expected:  {"detail":"Successfully logged out."}
-            After that, trying to use the same <REFRESH_TOKEN> at /api/auth/refresh/ will fail.
+
+            - Try to refresh again with the same refresh -> should now fail
+            curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
+            -H "Content-Type: application/json" \
+            -d '{"refresh":"<REFRESH_TOKEN>"}'
+
+            → Expected: 401/400 error (blacklisted): { "detail": "Invalid or expired refresh token." }
+
 ---
 
 ## ⚡ Development Notes

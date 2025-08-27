@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_filters',      # required for DRF filter backends
+    'drf_yasg',
     'rest_framework_simplejwt.token_blacklist',  # <-- NEW: enable refresh token blacklist
 
     # Local apps
