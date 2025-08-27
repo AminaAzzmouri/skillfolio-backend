@@ -58,9 +58,16 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
     - Windows: venv\Scripts\activate
     - macOS/Linux: source venv/bin/activate
 
-# 4. Install dependencies
+# 4. Install Django:
      pip install django
+
+# 5. Install dependencies
+     We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
+     
      pip install -r requirements.txt
+
+     - If you add/change packages, re-freeze:
+     pip freeze > requirements.txt
 
 # 5. Start the Django project:
      django-admin startproject skillfolio_backend
@@ -69,18 +76,22 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      python manage.py makemigrations
      python manage.py migrate
 
+     The blacklist tables for logout are created here because rest_framework_simplejwt.token_blacklist is installed
+
 # 7. Run the server:
      python manage.py runserver
 
-# 8. Create the users app:
+# 8. Create the users app  (if it doesn’t exist yet):
 
 #### Inside the Django project folder (where manage.py is located), run:
+     From the folder where manage.py lives:
      python manage.py startapp users
 
       **App Explanation:**  
-      The `users` app serves as the central place for user-related models and functionality. By keeping all user, certificate, project, and goal-related models in this single app, we avoid unnecessary app fragmentation. This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
+      The users app is the central place for user-related domain models and logic (users, certificates, projects, goals) to avoid fragmentation and simplify relationships.
+      This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
 
-#### Make sure to add 'users' to INSTALLED_APPS in settings.py:
+#### Add 'users' to INSTALLED_APPS in settings.py:
 
 INSTALLED_APPS = [
 ...,
@@ -89,8 +100,13 @@ INSTALLED_APPS = [
 ]
 
 # 9. Install backend auth & integration deps: (JWT, CORS, filtering)
+     (Already covered by requirements.txt; shown here for clarity)
+     
      pip install djangorestframework-simplejwt django-cors-headers django-filter
-     pip freeze > requirements.txt
+     
+     # For logout blacklist support:
+       pip install "djangorestframework-simplejwt[token_blacklist]"
+       pip freeze > requirements.txt
 
 # 10. Security & polish:
   - Restrict CORS to your frontend origin.
@@ -106,6 +122,7 @@ INSTALLED_APPS = [
 * JWT login with email/username
 * Register endpoint (dev helper)
 * Refresh endpoint
+* Logout endpoint (blacklist refresh tokens) → /api/auth/logout/ ✅
 
 # Certificates
 * Model, serializer, viewset, endpoints
@@ -129,7 +146,7 @@ INSTALLED_APPS = [
 * Projects: filter by certificate/status, search title/description, order by date/title
 * Goals: filter by deadline, order by created_at
 
-# Filters / Search / Ordering
+# Analytics
 * /api/analytics/summary/ → counts of certificates, projects, goals
 * /api/analytics/goals-progress/ → list of goals with progress
 
@@ -137,11 +154,11 @@ INSTALLED_APPS = [
 
 ## 🔮 What’s Next
 
-# Permissions: 
-optional object-level permission checks (extra belt-and-suspenders)
+# Permissions (nice to have): 
+Optional object-level permission class (extra belt-and-suspenders; current owner scoping via queryset is already enforced).
 
 # Docs: 
-Swagger/OpenAPI schema generation
+Swagger/OpenAPI schema generation (drf-yasg) for public API docs.
 
 # Frontend polish support:
 - Project edit/delete flows
@@ -254,9 +271,7 @@ python manage.py runserver
             -d '{"email":"you@example.com","password":"pass1234"}'
   
   -----------------------------------------------------------------------------------------------------------------------------------------------
-  This returns the new user’s id, username and email. 
-  It stores the email both as username and email in the default Django User model. 
-  Without running this, there is no user to log in.
+  Returns the new user’s id/username/email (email is used as the username).
   -----------------------------------------------------------------------------------------------------------------------------------------------
        
 2) Login → get access/refresh
@@ -265,11 +280,11 @@ python manage.py runserver
             -d '{"username":"you@example.com","password":"pass1234"}'
 
   -----------------------------------------------------------------------------------------------------------------------------------------------
-  If the registration succeeded, you should receive a JSON response with access and refresh tokens: 
+  You’ll receive { "access": "...", "refresh": "..." }. 
                 access → short-lived token for Authorization headers.
                 refresh → longer-lived token you can use at /api/auth/refresh/.
   
-  These tokens must be included in the Authorization: Bearer <access_token> header when calling protected endpoints.
+   Use Authorization: Bearer <ACCESS_TOKEN> for protected endpoints.
 
   With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. 
   Because the viewsets use OwnerScopedModelViewSet, each user sees only their own certificates/projects/goals.
@@ -445,7 +460,7 @@ coverage and CI.”
             
             → Expected:  [{"id": 3, "target_projects": 5, à"progress_percent": 40.0, ...}]
 
-7) Logout
+7) Logout (refresh-token blacklist)
             curl -X POST http://127.0.0.1:8000/api/auth/logout/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>" \
             -H "Content-Type: application/json" \
