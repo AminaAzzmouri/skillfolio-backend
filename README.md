@@ -15,6 +15,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Set and track learning goals (with deadlines, validations, and progress tracking ✅)
 - Filtering / search / ordering across list endpoints ✅ (see Quick Reference)
 - Analytics endpoints for dashboard summary & goal progress (frontend) ✅
+- Interactive API docs with Swagger/OpenAPI (drf-yasg) ✅
+- Polished Django Admin (list_display, filters, search, ordering) ✅
 
 ---
 
@@ -151,6 +153,13 @@ INSTALLED_APPS = [
 
 # Docs
 * Swagger docs now working (/api/docs/).
+
+# Admin
+* Certificates: issuer/date filters, searchable title/issuer, ordered by newest
+* Projects: status/work_type filters, searchable fields, newest-first ordering
+* Goals: deadline filters, searchable targets, ordered by deadline
+→ Admin now useful for quick QA/debugging
+
 ---
 
 ## 🔮 What’s Next
@@ -164,10 +173,14 @@ Optional object-level permission class (extra belt-and-suspenders; current owner
 - Dashboard graphs for counts/progress
 
 # Deployment hardening:
-- Restrict CORS to FE origin
-- Production DB migration to MySQL/PostgreSQL
-- Add caching & performance tuning
-- Unit & integration tests
+ - Restrict CORS to FE origin
+ - Production DB migration to MySQL/PostgreSQL
+ - Add caching & performance tuning
+ - Unit & integration tests
+
+# Admin polish (future):
+- Group fields in detail forms (Basic Info, Guided Fields, Links)
+- Add inline previews for related certificates/projects
 
 ---
 
@@ -294,7 +307,7 @@ Example:
 ✅ In short:
  /api/docs/ already works well.
  Adding annotations is optional, but makes the docs prettier, grouped, and self-explanatory.
-     
+
 ---
 
 ## 🔍 Quick cURL Examples: 
