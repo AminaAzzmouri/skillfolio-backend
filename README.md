@@ -34,8 +34,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Week 3: Django project setup + authentication
 - Week 4: 
       * Certificates, Projects, Goals models 
-      * APIs
-      * Validations
+      * APIs validations
       * Computed progress
       * Project guided-questions → auto-description
       * Analytics endpoints
@@ -256,6 +255,46 @@ Base URL (local): http://127.0.0.1:8000
 | Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                              |
 | Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                              |
 
+---
+
+
+## 📖 API Documentation (Swagger / drf-yasg)
+
+1. What we already have:
+     * /api/docs/ → interactive API docs. 
+       Lists all endpoints (certificates, projects, goals, auth, analytics, logout).
+
+     * You can try requests directly from the browser by pasting Bearer <ACCESS_TOKEN> into the “Authorize” button.
+
+     * /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
+
+2. What extra annotations could add:
+Currently, Swagger auto-generates docs from ViewSets and serializers. If we add @swagger_auto_schema decorators, we can:
+
+     * Group endpoints with tags → e.g., put login/logout/register under Auth.
+
+     * Add descriptions → clear human-friendly explanations for each operation.
+
+     * Customize schemas → define exact input/output when auto-detection is imperfect.
+
+Example:
+     @swagger_auto_schema(
+    tags=["Auth"],
+    operation_description="Login with email + password. Returns access and refresh JWT tokens."
+     )
+     def post(self, request, *args, **kwargs):
+     ...
+
+3. Why this matters
+
+     * Frontend devs & testers → instantly know what each endpoint expects.
+     * Contributors → clearer reference if the API is ever made public.
+     * Future me → easy reminder of inputs/outputs after a break.
+
+✅ In short:
+ /api/docs/ already works well.
+ Adding annotations is optional, but makes the docs prettier, grouped, and self-explanatory.
+     
 ---
 
 ## 🔍 Quick cURL Examples: 
