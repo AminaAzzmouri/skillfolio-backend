@@ -1,19 +1,27 @@
 """
-users/admin.py — Django Admin Config for Skillfolio
+users/admin.py — Django Admin configuration for Skillfolio
 
 Purpose
 ===============================================================================
-Expose the core models (Certificate, Project, Goal) in the Django admin so
-developers and admins can browse, search, and manage data efficiently.
+Make the Django admin genuinely useful for day-to-day QA and debugging.
+We expose the core models (Certificate, Project, Goal) with sensible list
+columns, filters, search, and ordering so you can quickly find and inspect data.
+
+How to read this file (plain English):
+- list_display: columns shown in the admin list page (the big table).
+- list_filter: right-hand sidebar filters to narrow results without typing.
+- search_fields: text search across chosen fields (substring match).
+- ordering: default sort order in the list page.
 
 Highlights
-- Certificate: searchable and filterable; recent-first ordering by date_earned.
-- Project: custom list columns (title, owner, linked certificate, status, etc.)
-  to make scanning many items quick and informative.
-- Goal: quick filters on deadlines and created_at; simple search.
+- Certificate: search by title/issuer, filter by issuer/date, newest first.
+- Project: show owner, linked certificate, status, work type, duration, created date.
+- Goal: show deadline and target at a glance; quick filters and simple search.
 
 Notes
-- The admin is only for trusted users; API clients should use the DRF endpoints.
+- Admin is for trusted staff only; normal clients use the REST API.
+- Project model uses `date_created` (auto timestamp). That’s why ordering and
+  filters reference `date_created` (not `created_at`).
 """
 
 from django.contrib import admin
@@ -25,17 +33,16 @@ from .models import Certificate, Project, Goal
 # -----------------------------------------------------------------------------
 @admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
-    # list_display controls which columns appear in the admin list view.
+    """
+    Certificate list view:
+      - Columns show the basics you care about during review (title/issuer/owner/date).
+      - Filters let you jump to a specific issuer or day quickly.
+      - Search helps when you only remember part of a title or issuer name.
+    """
     list_display = ("title", "issuer", "user", "date_earned", "file_upload")
-
-    # list_filter adds right-side filters to quickly narrow records.
     list_filter = ("issuer", "date_earned")
-
-    # search_fields enables substring search; use minimal fields for speed.
     search_fields = ("title", "issuer")
-
-    # newest certificates first in the list view.
-    ordering = ("-date_earned",)
+    ordering = ("-date_earned",)  # newest certificates at the top
 
 
 # -----------------------------------------------------------------------------
@@ -44,31 +51,31 @@ class CertificateAdmin(admin.ModelAdmin):
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
     """
-    Custom admin config for Project.
-
-    Why this customization matters:
-    - Admin list views default to showing only __str__().
-    - By surfacing key fields (owner, status, link to certificate, created date,
-      guided fields), admins can audit content and relationships at a glance.
+    Project list view:
+      - Columns surface ownership and linkage (user/certificate), delivery state
+        (status), and quick context (work_type, duration_text).
+      - Filters make it easy to audit completed projects, team work, or specific
+        certificate relationships.
+      - Search spans both the core title/description and the guided text fields
+        you often reference when verifying content.
     """
-
     list_display = (
         "title", "user", "certificate", "status", "work_type",
-        "duration_text", "date_created"
+        "duration_text", "date_created",
     )
-
-    # Quick filters help drill into specific subsets (e.g., completed projects).
     list_filter = ("status", "work_type", "certificate", "date_created")
-
-    # Keep searches small and practical. These fields reflect what authors
-    # commonly remember when locating a project.
     search_fields = (
-        "title", "description", "problem_solved", "tools_used", "impact",
-        "challenges_short", "skills_used", "outcome_short", "skills_to_improve"
+        "title",
+        "description",
+        "problem_solved",
+        "tools_used",
+        "impact",
+        "challenges_short",
+        "skills_used",
+        "outcome_short",
+        "skills_to_improve",
     )
-
-    # Show newest first so recent work is immediately visible.
-    ordering = ("-date_created",)
+    ordering = ("-date_created",)  # newest projects first
 
 
 # -----------------------------------------------------------------------------
@@ -76,7 +83,13 @@ class ProjectAdmin(admin.ModelAdmin):
 # -----------------------------------------------------------------------------
 @admin.register(Goal)
 class GoalAdmin(admin.ModelAdmin):
+    """
+    Goal list view:
+      - Columns show the owner, numeric target, deadline, and when it was created.
+      - Filters let you jump to upcoming deadlines or recent activity.
+      - Simple search on target_projects helps when scanning goals by size.
+    """
     list_display = ("user", "target_projects", "deadline", "created_at")
     list_filter = ("deadline", "created_at")
     search_fields = ("target_projects",)
-    ordering = ("deadline",)
+    ordering = ("deadline",)  # sort by approaching deadlines
