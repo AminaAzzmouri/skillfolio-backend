@@ -33,6 +33,7 @@ class CertificateAdmin(admin.ModelAdmin):
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
     """
+
     Custom admin config for Project model.
 
     Why customize?
@@ -47,10 +48,17 @@ class ProjectAdmin(admin.ModelAdmin):
 
     This makes it easier to review many projects at once in admin.
     """
-    list_display = ("title", "user", "certificate", "status", "date_created")
-    list_filter = ("status", "certificate", "date_created")
-    search_fields = ("title", "description", "problem_solved", "tools_used", "impact")
+    list_display = (
+        "title", "user", "certificate", "status", "work_type",
+        "duration_text", "date_created"
+    )
+    list_filter = ("status", "work_type", "certificate", "date_created")
+    search_fields = (
+        "title", "description", "problem_solved", "tools_used", "impact",
+        "challenges_short", "skills_used", "outcome_short", "skills_to_improve"
+    )
     ordering = ("-date_created",)
+
 
 
 # -----------------------------------------------------------------------------

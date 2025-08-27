@@ -183,6 +183,9 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     ----------------------------------------------------------------------------
     - List/create/update/delete projects owned by the authenticated user.
     - Optionally link a project to a certificate (nullable FK).
+    - Guided answers are stored (work_type, duration_text, primary_goal,
+      challenges_short, skills_used, outcome_short, skills_to_improve).
+      If `description` is blank, the backend auto-generates it from these fields.
     - Includes select_related('certificate') for efficient list queries.
 
     Query params:

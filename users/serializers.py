@@ -19,7 +19,10 @@ Week 4 Enhancements
 - CertificateSerializer: validate date_earned not in the future (so API surfaces
   a clear error); file types/size are also checked by model validators.
 - ProjectSerializer: includes new fields (status, problem_solved, tools_used,
-  impact).
+  impact) and **guided question fields** (work_type, duration_text, primary_goal,
+  challenges_short, skills_used, outcome_short, skills_to_improve). The model
+  auto-generates `description` on save if it’s blank.
+  
 - GoalSerializer: exposes a computed read-only field `progress_percent`, which
   reflects completed projects vs target_projects for the current user.
 
@@ -60,7 +63,8 @@ class CertificateSerializer(serializers.ModelSerializer):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    """
+
+     """
     ProjectSerializer
     =============================================================================
     Handles serialization for Project objects.
@@ -72,9 +76,11 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     Notes:
       - `certificate` is optional and may be null (project not linked).
-      - New fields (Week 4): status, problem_solved, tools_used, impact.
+      - New fields: status, problem_solved, tools_used, impact,
+        work_type, duration_text, primary_goal, challenges_short,
+        skills_used, outcome_short, skills_to_improve.
+      - If `description` is blank, the model will auto-generate it from the guided fields.
     """
-
     class Meta:
         model = Project
         fields = "__all__"
