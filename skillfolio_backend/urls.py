@@ -33,6 +33,9 @@ from users.auth_views import (
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
+
+from django.shortcuts import redirect
+
 # -----------------------------------------------------------------------------
 # DRF Routers (ViewSets → automatic CRUD endpoints)
 # -----------------------------------------------------------------------------
@@ -68,6 +71,8 @@ schema_view = get_schema_view(
 # URL Patterns
 # -----------------------------------------------------------------------------
 urlpatterns = [
+    path("", lambda r: redirect("api-docs-swagger"), name="root-redirect"), # add a tiny root view that redirects to Swagger.
+    
     path("admin/", admin.site.urls),
 
     # API (ViewSets)

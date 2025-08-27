@@ -182,6 +182,11 @@ Optional object-level permission class (extra belt-and-suspenders; current owner
 - Group fields in detail forms (Basic Info, Guided Fields, Links)
 - Add inline previews for related certificates/projects
 
+# Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).  
+   * Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).  
+   * Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.  
+   This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
+   
 ---
 
 ## 📌 API Quick Reference:
@@ -378,6 +383,27 @@ python manage.py runserver
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/certificates/?ordering=date_earned"
 
+# Partial update (PATCH)
+            curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"Updated Title"}'
+
+# Full update (PUT)
+            curl -X PUT http://127.0.0.1:8000/api/certificates/5/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"New Title","issuer":"Udemy","date_earned":"2024-08-01"}'
+
+# PATCH file with multipart (optional)
+            curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -F "file_upload=@C:/path/to/new.pdf"
+
+# DELETE
+            curl -X DELETE http://127.0.0.1:8000/api/certificates/5/ \
+            -H "Authorization: Bearer <ACCESS>"
+
 4) Projects
 
 # Create (leave description blank; include guided answers):
@@ -438,6 +464,39 @@ coverage and CI.”
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?page=2"
 
+# Partial update: PATCH (status / guided fields / link a certificate):
+            curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{
+               "status": "in_progress",
+               "certificate": 5,
+               "duration_text": "3 weeks",
+               "primary_goal": "deliver_feature"
+               }'
+
+# FULL update
+            curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \curl -X PUT http://127.0.0.1:8000/api/projects/12/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{
+                   "title": "Rewritten Project",
+                   "description": "Full replace",
+                   "certificate": null,
+                   "status": "completed",
+                   "work_type": "team",
+                   "duration_text": "10 days",
+                   "primary_goal": "build_demo",
+                   "challenges_short": "X",
+                   "skills_used": "React, DRF",
+                   "outcome_short": "Shipped!",
+                   "skills_to_improve": "Testing"
+               }'
+
+# Delete
+            curl -X DELETE http://127.0.0.1:8000/api/projects/12/ \
+            -H "Authorization: Bearer <ACCESS>"
+
 5) Goals
     
 # Create
@@ -496,6 +555,22 @@ coverage and CI.”
             -d '{"target_projects": 3, "deadline": "2000-01-01"}'
 
             → Expected: {"deadline": ["deadline cannot be in the past."]}
+
+# Partial Update
+            curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"target_projects": 10}'
+
+# Full Update
+            curl -X PUT http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"target_projects": 12, "deadline": "2025-12-31"}'
+
+# DELETE:
+            curl -X DELETE http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>"
 
 6) Analytics
 
