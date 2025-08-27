@@ -25,28 +25,106 @@ Week 4 Enhancements
 -------------------------------------------------------------------------------
 - Certificate: server-side validations for date_earned (no future dates) and
   uploaded file (type/size).
+
 - Project: 
-        1. added `status` (planned / in_progress / completed)
-        
-        2. added *guided question* fields used to **auto-generate** a polished
-  description on the server if `description` is blank:
-            - work_type (individual/team)
-            - duration_text (short free text)
-            - primary_goal (practice_skill/deliver_feature/build_demo/solve_problem)
-            - challenges_short, skills_used, outcome_short, skills_to_improve (short texts)
-            
-        - On save(), if `description` is empty, we compose it from the guided fields
-  (user can still edit/override on the next updates).
+        * added `status` (planned / in_progress / completed) 
+        * added *guided question* fields used to **auto-generate** a polished
+          description on the server if `description` is blank:
+                - work_type (individual/team)
+                - duration_text (short free text)
+                - primary_goal (practice_skill/deliver_feature/build_demo/solve_problem)
+                - challenges_short, skills_used, outcome_short, skills_to_improve (short texts)
+          > On save(), if `description` is empty, we compose it from the guided fields
+            (user can still edit/override on the next updates).
 
 - Goal: compute progress later at the serializer level (percentage of completed
   projects vs target_projects).
 """
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from datetime import date
-...
+
+
+# -----------------------------
+# Helpers / validators (inline)
+# -----------------------------
+def validate_file_size_5mb(f):
+    """Restrict uploads to <= 5 MB."""
+    max_bytes = 5 * 1024 * 1024
+    if f and getattr(f, "size", 0) > max_bytes:
+        raise ValidationError("File too large (max 5 MB).")
+
+
+class Certificate(models.Model):
+    """
+    Certificate
+    =============================================================================
+    Purpose
+    ---------------------------------------------------------------------------
+    Represents a verified learning achievement (e.g., a course completion).
+    Stores issuer metadata and an optional uploaded file (PDF/image).
+
+    Relationships
+    ---------------------------------------------------------------------------
+    - user: the owner of the certificate (FK to `auth.User`).
+    - projects: reverse relation from Project → Certificate (related_name="projects").
+
+    Key Fields
+    ---------------------------------------------------------------------------
+    - title (CharField): The certificate name (e.g., “Django Basics”).
+    - issuer (CharField): Who issued it (e.g., Coursera, Udacity).
+    - date_earned (DateField): When the certificate was earned.
+    - file_upload (FileField, optional): The uploaded proof, saved to "certificates/".
+
+    Behavior
+    ---------------------------------------------------------------------------
+    - __str__: readable representation "Title - Issuer".
+    - clean(): validates that date_earned is not in the future.
+
+    Future Enhancements
+    ---------------------------------------------------------------------------
+    - Extra fields: certificate_id/code, specialization/track, skill tags.
+    - Indexes: add indexes if we’ll filter heavily by issuer or date_earned.
+    
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="certificates",
+        help_text="Owner of this certificate.",
+    )
+    title = models.CharField(max_length=255, help_text="Certificate title.")
+    issuer = models.CharField(max_length=255, help_text="Organization/platform that issued the certificate.")
+    date_earned = models.DateField(help_text="Date when the certificate was earned.")
+    file_upload = models.FileField(
+        upload_to="certificates/",
+        blank=True,
+        null=True,
+        help_text="Optional proof file (PDF/image).",
+        validators=[
+            FileExtensionValidator(allowed_extensions=["pdf", "png", "jpg", "jpeg", "webp"]),
+            validate_file_size_5mb,
+        ],
+    )
+
+    class Meta:
+        ordering = ["-date_earned"]  # Show most recent certificates first
+        verbose_name = "Certificate"
+        verbose_name_plural = "Certificates"  # Makes admin interface cleaner.
+
+    def clean(self):
+        # Prevent future dates for earned certificates
+        if self.date_earned and self.date_earned > date.today():
+            raise ValidationError({"date_earned": "date_earned cannot be in the future."})
+
+    def __str__(self):
+        return f"{self.title} - {self.issuer}"
+
+
 class Project(models.Model):
     """
     Project
@@ -87,12 +165,12 @@ class Project(models.Model):
         help_text="Owner of this project.",
     )
     certificate = models.ForeignKey(
-        'users.Certificate',  # or simply 'Certificate' since it’s the same app
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name="projects",
-    help_text="Optionally link this project to a certificate.",
+        Certificate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="projects",
+        help_text="Optionally link this project to a certificate.",
     )
     title = models.CharField(max_length=255, help_text="Project title.")
     description = models.TextField(help_text="What you built, how, tools used, and impact.", blank=True)
@@ -241,3 +319,69 @@ class Project(models.Model):
         if not self.description or not self.description.strip():
             self.description = self._generated_description()
         super().save(*args, **kwargs)
+
+
+class Goal(models.Model):
+    """
+    Goal
+    =============================================================================
+    Purpose
+    ---------------------------------------------------------------------------
+    Lightweight planning tool for a user to set targets (e.g., “Build 5 projects
+    by 2025-12-31”).
+
+    Relationships
+    ---------------------------------------------------------------------------
+    - user: the owner of the goal.
+
+    Key Fields
+    ---------------------------------------------------------------------------
+    - target_projects (IntegerField): Numeric target to hit.
+    - deadline (DateField): When the target should be achieved by.
+    - created_at (DateTimeField auto_now_add): Goal creation timestamp.
+
+    Behavior
+    ---------------------------------------------------------------------------
+    - __str__: human-friendly summary.
+
+    Future Enhancements
+    ---------------------------------------------------------------------------
+    - Validation: ensure deadline is not in the past.
+    - Computed progress: percentage of user.projects completed vs target_projects.
+    - Status: not_started / on_track / at_risk / achieved.
+    
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="goals",
+        help_text="Owner of this goal.",
+    )
+    target_projects = models.IntegerField(help_text="How many projects the user aims to complete.")
+    deadline = models.DateField(help_text="Deadline for completing the target.")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="When this goal was created.")
+
+
+    class Meta:
+        ordering = ["deadline"]  # Goals listed by upcoming deadlines
+        verbose_name = "Goal"
+        verbose_name_plural = "Goals"  # Makes admin interface cleaner.
+
+
+    def clean(self):
+        # Server-side data integrity: positive target & non-past deadline
+        from datetime import date as _date
+        errors = {}
+        if self.target_projects is None or self.target_projects <= 0:
+            errors["target_projects"] = "target_projects must be a positive integer."
+        if self.deadline and self.deadline < _date.today():
+            errors["deadline"] = "deadline cannot be in the past."
+        if errors:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(errors)
+
+
+    def __str__(self):
+        return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
+

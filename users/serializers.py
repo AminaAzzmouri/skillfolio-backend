@@ -64,7 +64,7 @@ class CertificateSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
 
-     """
+    """
     ProjectSerializer
     =============================================================================
     Handles serialization for Project objects.

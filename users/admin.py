@@ -13,11 +13,8 @@ Highlights
 """
 
 from django.contrib import admin
-from django.apps import apps 
+from .models import Certificate, Project, Goal
 
-Certificate = apps.get_model('users', 'Certificate')
-Project = apps.get_model('users', 'Project')
-Goal = apps.get_model('users', 'Goal')
 
 # -----------------------------------------------------------------------------
 # Certificate Admin
@@ -35,6 +32,7 @@ class CertificateAdmin(admin.ModelAdmin):
 # -----------------------------------------------------------------------------
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
+    
     """
 
     Custom admin config for Project model.
