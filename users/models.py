@@ -87,12 +87,12 @@ class Project(models.Model):
         help_text="Owner of this project.",
     )
     certificate = models.ForeignKey(
-        Certificate,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="projects",
-        help_text="Optionally link this project to a certificate.",
+        'users.Certificate',  # or simply 'Certificate' since it’s the same app
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="projects",
+    help_text="Optionally link this project to a certificate.",
     )
     title = models.CharField(max_length=255, help_text="Project title.")
     description = models.TextField(help_text="What you built, how, tools used, and impact.", blank=True)
