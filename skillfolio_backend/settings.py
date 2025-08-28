@@ -33,7 +33,7 @@ def _get_list(env_key: str, default=None):
     """Parse comma-separated lists from env (e.g., 'a.com,b.com')."""
     if default is None:
         default = []
-    raw = os.environ.get(env_key, None)
+    raw = os.environ.get(env_key)
     if not raw:
         return default
     return [item.strip() for item in raw.split(",") if item.strip()]
@@ -41,16 +41,39 @@ def _get_list(env_key: str, default=None):
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ⚠️ Never commit real production secrets
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z"  # dev fallback
-)
-
+# Reads DJANGO_DEBUG from env. Defaults to True for dev.
 DEBUG = _get_bool("DJANGO_DEBUG", True)
 
-# Comma-separated, e.g. "localhost,127.0.0.1,skillfolio.example.com"
+
+# SECRET_KEY with safe production enforcement
+#    - In dev (DEBUG=True): fallback to a dev key if none provided
+#    - In prod (DEBUG=False): require DJANGO_SECRET_KEY
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or (
+    "django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z" if DEBUG else None
+)
+if not SECRET_KEY:
+    raise RuntimeError("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=False")
+
+
+# Hosts from env (defaults depend on DEBUG) 
+# Reads DJANGO_ALLOWED_HOSTS as a comma-separated list. Defaults to:
+#           -empty list [] in dev (DEBUG=True)
+#           -["127.0.0.1"] in prod (DEBUG=False)
+
 ALLOWED_HOSTS = _get_list("DJANGO_ALLOWED_HOSTS", [] if DEBUG else ["127.0.0.1"])
+
+
+# Dev CORS defaults (lock down in prod via env)
+CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
+
+# If you want to control exact origins in prod, set CORS_ALLOWED_ORIGINS in env:
+# e.g. CORS_ALLOWED_ORIGINS="https://sf-frontend.vercel.app,https://skillfolio.example.com"
+CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
+
+# These keep your current dev behavior but let you flip to safe prod settings by setting env vars.
+# Lets you safely switch between permissive dev mode and restricted prod mode.
+
 
 
 INSTALLED_APPS = [
@@ -161,12 +184,3 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Dev CORS defaults (lock down in prod via env)
-CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
-
-# If you want to control exact origins in prod, set CORS_ALLOWED_ORIGINS in env:
-# e.g. CORS_ALLOWED_ORIGINS="https://sf-frontend.vercel.app,https://skillfolio.example.com"
-CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
-
-# These keep your current dev behavior but let you flip to safe prod settings by setting env vars.

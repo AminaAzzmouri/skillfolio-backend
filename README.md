@@ -63,8 +63,6 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Project Setup Instructions:
 
-===========================================================================
-
 # 1. Clone repo
 
      git clone https://github.com/AminaAzzmouri/skillfolio-backend.git
@@ -367,7 +365,7 @@ python manage.py runserver
             -H "Content-Type: application/json" \
             -d '{"email":"you@example.com","password":"pass1234"}'
 
-          Returns the new user’s id/username/email (email is used as the username).
+* Returns the new user’s id/username/email (email is used as the username).
 
 
 
@@ -639,14 +637,14 @@ python manage.py runserver
             curl -H "Authorization: Bearer <ACCESS>"
             http://127.0.0.1:8000/api/analytics/summary/
 
-            → Expected: {"certificates_count": 2, "projects_count": 5, "goals_count": 1}
+- → Expected: {"certificates_count": 2, "projects_count": 5, "goals_count": 1}
 
 # Goals with progress
 
             curl -H "Authorization: Bearer <ACCESS>"
             http://127.0.0.1:8000/api/analytics/goals-progress/
 
-            → Expected:  [{"id": 3, "target_projects": 5, "progress_percent": 40.0, ...}]
+- → Expected:  [{"id": 3, "target_projects": 5, "progress_percent": 40.0, ...}]
 
 # 7) Logout (refresh-token blacklist)
 
@@ -656,7 +654,7 @@ python manage.py runserver
             -d '{"refresh": "<REFRESH_TOKEN>"}'
 
 
-- Expected: {"detail":"Successfully logged out."}
+- → Expected: {"detail":"Successfully logged out."}
 
             - Try to refresh again with the same refresh -> should now fail
             curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
@@ -752,7 +750,7 @@ python manage.py runserver
 
 ## 🚀 Deployment (env-based settings)
 
-- In production, configure settings via environment variables instead of editing code.
+- In production, configure settings via environment variables instead of editing code (e.g., `.env` or your host provider’s panel).
 
 - Create an `.env` (or set real env vars in your host) with:
 
@@ -762,14 +760,19 @@ python manage.py runserver
 
 - Choose one of the following CORS configs:
 
+ * For local dev only (permissive)
+
+            CORS_ALLOW_ALL_ORIGINS=True
+
+ * For production (restrict to your FE origin)
             CORS_ALLOW_ALL_ORIGINS=False
             CORS_ALLOWED_ORIGINS=https://your-frontend.example.com
 
 **Notes**
 
-- `DJANGO_SECRET_KEY` must be long & random. Never commit it.
-- `DJANGO_ALLOWED_HOSTS` is a comma-separated list.
-- Prefer restricting CORS via `CORS_ALLOWED_ORIGINS`. Only set `CORS_ALLOW_ALL_ORIGINS=True` for local development.
+- When `DJANGO_DEBUG=False`, the app **requires** `DJANGO_SECRET_KEY` (safe default is enforced in code).
+- `DJANGO_ALLOWED_HOSTS` is comma-separated, no spaces.
+- Prefer `CORS_ALLOWED_ORIGINS` in production; keep `CORS_ALLOW_ALL_ORIGINS=True` only for local dev.
 
 ---
 
