@@ -1,10 +1,13 @@
 # Skillfolio Backend
 
-![Backend Tests](https://github.com/AminaAzzmouri/skillfolio-backend/actions/workflows/tests.yml/badge.svg)
-
 This is the backend of **Skillfolio**, a web application that helps self-learners archive their certificates, track skills, and connect achievements to projects.
 
 Built with **Django REST Framework**, the backend provides secure APIs for authentication, certificate management, and project linking.
+
+---
+
+![Backend Tests](https://github.com/AminaAzzmouri/skillfolio-backend/actions/workflows/tests.yml/badge.svg)
+
 
 ---
 
@@ -697,7 +700,7 @@ python manage.py runserver
   - Auth
     ** Login returns access + refresh.
     ** Refresh exchanges a refresh for a new access token.
-    \*\* Logout blacklists the refresh (subsequent refresh fails).
+    ** Logout blacklists the refresh (subsequent refresh fails).
 
   - Certificates
     ** Create via JSON.
