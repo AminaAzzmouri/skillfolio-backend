@@ -21,12 +21,37 @@ Security
 from pathlib import Path
 from datetime import timedelta
 
+
+import os
+
+def _get_bool(env_key: str, default: bool = False) -> bool:
+    """Parse booleans from env like '1', 'true', 'yes'."""
+    raw = os.environ.get(env_key, str(default))
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+def _get_list(env_key: str, default=None):
+    """Parse comma-separated lists from env (e.g., 'a.com,b.com')."""
+    if default is None:
+        default = []
+    raw = os.environ.get(env_key, None)
+    if not raw:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ⚠️ Replace with a real secret in production
-SECRET_KEY = 'django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z'
-DEBUG = True
-ALLOWED_HOSTS = []
+# ⚠️ Never commit real production secrets
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z"  # dev fallback
+)
+
+DEBUG = _get_bool("DJANGO_DEBUG", True)
+
+# Comma-separated, e.g. "localhost,127.0.0.1,skillfolio.example.com"
+ALLOWED_HOSTS = _get_list("DJANGO_ALLOWED_HOSTS", [] if DEBUG else ["127.0.0.1"])
+
 
 INSTALLED_APPS = [
     # Django core
@@ -137,5 +162,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Dev CORS (lock down in production)
-CORS_ALLOW_ALL_ORIGINS = True
+# Dev CORS defaults (lock down in prod via env)
+CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
+
+# If you want to control exact origins in prod, set CORS_ALLOWED_ORIGINS in env:
+# e.g. CORS_ALLOWED_ORIGINS="https://sf-frontend.vercel.app,https://skillfolio.example.com"
+CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
+
+# These keep your current dev behavior but let you flip to safe prod settings by setting env vars.

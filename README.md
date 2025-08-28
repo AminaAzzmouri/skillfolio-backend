@@ -6,18 +6,27 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 ---
 
-## 🚀 Features (Planned)
+## 🚀 Features
+
+### ✅ Implemented
 
 - User authentication (register, login, logout, JWT)
-- Upload and manage certificates (PDF, with metadata: title, date, specialty)
-- CRUD for achievements
-- Link projects to certificates (with guided description form + auto-generated description from guided answers ✅)
-- Set and track learning goals (with deadlines, validations, and progress tracking ✅)
-- Filtering / search / ordering across list endpoints ✅ (see Quick Reference)
-- Analytics endpoints for dashboard summary & goal progress (frontend) ✅
-- Interactive API docs with Swagger/OpenAPI (drf-yasg) ✅
-- Polished Django Admin (list_display, filters, search, ordering) ✅
+- Upload and manage certificates (PDF, with metadata: title, date)
+- CRUD for achievements (Certificates, Projects, Goals)
+- Link projects to certificates (guided fields + auto-generated description)
+- Set and track learning goals (with deadlines, validations, and progress tracking)
+- Filtering / search / ordering across list endpoints (see Quick Reference)
+- Analytics endpoints for dashboard summary & goal progress (frontend)
+- Interactive API docs with Swagger/OpenAPI (drf-yasg)
+- Polished Django Admin (list_display, filters, search, ordering)
+- Basic API smoke tests (auth, certs, projects, analytics)
 
+### 🛠 Planned / Nice-to-have
+
+- Object-level permissions (extra belt-and-suspenders)
+- Goal status UX (on_track / achieved / expired)
+- CI + more test coverage
+- Production storage (e.g., S3) for uploads
 ---
 
 ## 🛠️ Tech Stack
@@ -59,30 +68,24 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
     - Windows: venv\Scripts\activate
     - macOS/Linux: source venv/bin/activate
 
-# 4. Install Django:
-     pip install django
-
-# 5. Install dependencies
+# 4. Install dependencies
 - We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
      pip install -r requirements.txt
 
 - If you add/change packages, re-freeze:
      pip freeze > requirements.txt
 
-# 6. Start the Django project:
-     django-admin startproject skillfolio_backend
-
-# 7. Apply migrations:
+# 5. Apply migrations:
      python manage.py makemigrations
      python manage.py migrate
 
 The blacklist tables for logout are created here because 
      rest_framework_simplejwt.token_blacklist is installed
 
-# 8. Run the server:
+# 6. Run the server:
      python manage.py runserver
 
-# 9. (Already included) users app
+# 7. (Already included) users app
 - This repo already includes a `users` app which centralizes user, certificate, project, and goal logic. 
 No need to re-create it.
 
@@ -99,7 +102,7 @@ No need to re-create it.
      'users', # <-- newly created app
      ]
 
-# 10. Install backend auth & integration deps: (JWT, CORS, filtering)
+# 8. Install backend auth & integration deps: (JWT, CORS, filtering)
 (Already covered by requirements.txt; shown here for clarity)     
 
        pip install djangorestframework-simplejwt django-cors-headers django-filter
@@ -108,7 +111,7 @@ No need to re-create it.
        pip install "djangorestframework-simplejwt[token_blacklist]"
        pip freeze > requirements.txt
 
-# 11. Security & polish:
+# 9. Security & polish:
   - Restrict CORS to your frontend origin.
   - Add validation (e.g., no past deadline, file size/type check).
   - Add search/ordering params to README.
@@ -165,28 +168,25 @@ No need to re-create it.
 
 ## 🔮 What’s Next
 
-# Permissions (nice to have): 
-Optional object-level permission class (extra belt-and-suspenders; current owner scoping via queryset is already enforced).
-
-# Frontend polish support:
-- Project edit/delete flows
-- Certificate preview (image/PDF in dashboard cards)
-- Dashboard graphs for counts/progress
-
-# Deployment hardening:
- - Restrict CORS to FE origin
- - Production DB migration to MySQL/PostgreSQL
- - Add caching & performance tuning
- - Expand test coverage (unit + integration)
+# Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).  
+   * Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).  
+   * Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.  
+- This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
 
 # Admin polish (future):
 - Group fields in detail forms (Basic Info, Guided Fields, Links)
 - Add inline previews for related certificates/projects
 
-# Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).  
-   * Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).  
-   * Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.  
-   This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
+# Permissions (optional): 
+- Add an object-level permission class for extra safety on top of owner scoping
+
+# Deployment hardening:
+ - Restrict CORS to FE origin
+ - Production DB migration to MySQL/PostgreSQL
+ - Add caching & performance tuning
+
+# Test coverage:
+- Expand beyond smoke tests (edge cases, permissions, validations).
 
 ---
 
@@ -204,7 +204,7 @@ Base URL (local): http://127.0.0.1:8000
 | `/api/auth/refresh/`  | `POST`  | ❌   | Exchange refresh for a new access token.                                                    |
 
 
-- Login body examples**:  
+- Login body examples:  
           { "email": "you@example.com", "password": "pass1234" }
 - Or:     
           { "username": "you@example.com", "password": "pass1234" }
@@ -544,7 +544,7 @@ python manage.py runserver
 # Paginate
 
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/projects/?page=2"
+            "http://127.0.0.1:8000/api/goals/?page=2"
 
 # Goal Settings validations
 
@@ -599,7 +599,7 @@ python manage.py runserver
             curl -H "Authorization: Bearer <ACCESS>" 
             http://127.0.0.1:8000/api/analytics/goals-progress/
             
-            → Expected:  [{"id": 3, "target_projects": 5, à"progress_percent": 40.0, ...}]
+            → Expected:  [{"id": 3, "target_projects": 5, "progress_percent": 40.0, ...}]
 
 # 7) Logout (refresh-token blacklist)
 
@@ -657,7 +657,36 @@ python manage.py runserver
 
  - Recommended when recording a demo or debugging.
 
+### Run a single test (by dotted path)
+
+            python manage.py test users.tests.test_api.TestAPI::test_login_refresh -v 2
+
+- This prints the test name and status, great for demos.
+
 ### Notes
 - Tests live in users/tests/.
 - users/tests/__init__.py makes sure the folder is treated as a package and discovered automatically.
 - Tests create an isolated test database and do not touch your dev data.    
+
+---
+
+## 🚀 Deployment (env-based settings)
+
+- In production, configure settings via environment variables instead of editing code.
+
+- Create an `.env` (or set real env vars in your host) with:
+
+            DJANGO_SECRET_KEY=replace-with-a-strong-random-string
+            DJANGO_DEBUG=False
+            DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
+
+- Choose one of the following CORS configs:
+
+            CORS_ALLOW_ALL_ORIGINS=False
+            CORS_ALLOWED_ORIGINS=https://your-frontend.example.com
+
+**Notes**
+
+- `DJANGO_SECRET_KEY` must be long & random. Never commit it.
+- `DJANGO_ALLOWED_HOSTS` is a comma-separated list.
+- Prefer restricting CORS via `CORS_ALLOWED_ORIGINS`. Only set `CORS_ALLOW_ALL_ORIGINS=True` for local development.
