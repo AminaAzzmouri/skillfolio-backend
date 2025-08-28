@@ -1,0 +1,22 @@
+# =============================================================================
+# runtime.txt — Python runtime pin for Render/Heroku
+#
+# Purpose
+# -----------------------------------------------------------------------------
+# - Tells the Render build system which exact Python version to use.
+# - Ensures consistency across local dev, GitHub Actions, and deployed service.
+#
+# Format
+# -----------------------------------------------------------------------------
+# python-<major>.<minor>.<patch>
+# Example: python-3.11.9
+#
+# Notes
+# -----------------------------------------------------------------------------
+# - Must match the version installed in your local venv and pinned in CI.
+# - If you upgrade Python locally, update this file as well.
+# - Render reads this automatically; no extra configuration needed.
+# =============================================================================
+
+
+python-3.11.9git status

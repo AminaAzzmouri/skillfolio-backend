@@ -200,6 +200,13 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Management command (`python manage.py seed_demo`) → idempotent, works even on an existing DB.
 - Could create a demo user + sample certificate/project/goal for fast onboarding.
 
+# Deployment foundations
+
+- Env-driven settings (DEBUG/SECRET_KEY/ALLOWED_HOSTS/CORS).
+- Static files via WhiteNoise; Gunicorn start command ready.
+- Optional S3 media wiring behind USE_S3_MEDIA.
+- CI runs tests on GitHub Actions (Python 3.11).
+
 ---
 
 ## 🔮 What’s Next
@@ -222,9 +229,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Deployment hardening:
 
-- Restrict CORS to FE origin
-- Production DB migration to MySQL/PostgreSQL
-- Add caching & performance tuning
+- Restrict CORS to FE origin (set CORS_ALLOW_ALL_ORIGINS=False and provide your real domain in CORS_ALLOWED_ORIGINS in production env).
+- Production DB migration to managed Postgres/MySQL (add a DATABASE_URL/prod settings and migrate).
+- Caching & performance (e.g., Redis cache backend, DRF throttling, gzip, logging/observability).
 
 # Test coverage:
 
@@ -776,6 +783,25 @@ python manage.py runserver
 - `DJANGO_ALLOWED_HOSTS` is comma-separated, no spaces.
 - Prefer `CORS_ALLOWED_ORIGINS` in production; keep `CORS_ALLOW_ALL_ORIGINS=True` only for local dev.
 
+ ### 📦 S3 Media (optional, production)
+
+- To serve uploads from S3, set:
+
+            USE_S3_MEDIA=True
+            AWS_STORAGE_BUCKET_NAME=your-bucket
+            AWS_S3_REGION_NAME=us-east-1
+
+# If not using instance role:
+
+            AWS_ACCESS_KEY_ID=...
+            AWS_SECRET_ACCESS_KEY=...
+
+# Optional CDN/CloudFront:
+            AWS_S3_CUSTOM_DOMAIN=cdn.skillfolio.example.com
+
+  * Make the bucket public or keep private with signed URLs (AWS_QUERYSTRING_AUTH=True).
+  * If using CloudFront, set AWS_S3_CUSTOM_DOMAIN to your distribution domain.
+
 ---
 
 ## 📦 Demo Data (optional)
@@ -795,22 +821,3 @@ python manage.py runserver
   * 1 certificate, 1 project (linked to that certificate), and 1 goal
 
 ---
-
- ### 📦 S3 Media (optional, production)
-
-- To serve uploads from S3, set:
-
-            USE_S3_MEDIA=True
-            AWS_STORAGE_BUCKET_NAME=your-bucket
-            AWS_S3_REGION_NAME=us-east-1
-
-# If not using instance role:
-
-            AWS_ACCESS_KEY_ID=...
-            AWS_SECRET_ACCESS_KEY=...
-
-# Optional CDN/CloudFront:
-            AWS_S3_CUSTOM_DOMAIN=cdn.skillfolio.example.com
-
-  * Make the bucket public or keep private with signed URLs (AWS_QUERYSTRING_AUTH=True).
-  * If using CloudFront, set AWS_S3_CUSTOM_DOMAIN to your distribution domain.
