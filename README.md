@@ -8,6 +8,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 ![Backend Tests](https://github.com/AminaAzzmouri/skillfolio-backend/actions/workflows/tests.yml/badge.svg)
 
+- Tests run automatically on GitHub Actions with Python 3.11
 
 ---
 
@@ -30,14 +31,14 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 - Object-level permissions (extra belt-and-suspenders)
 - Goal status UX (on_track / achieved / expired)
-- CI + more test coverage
+- More test coverage (CI already runs smoke tests on every push/PR
 - Production storage (e.g., S3) for uploads
 
 ---
 
 ## 🛠️ Tech Stack
 
-- Python / Django
+-  Python 3.11 / Django 4.2 LTS
 - Django REST Framework (DRF)
 - SQLite (development) / MySQL (production)
 - JWT Authentication
@@ -79,7 +80,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # 4. Install dependencies
 
-- We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
+- We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT (blacklist support is built-in).
   pip install -r requirements.txt
 
 - If you add/change packages, re-freeze:
@@ -90,8 +91,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
      python manage.py makemigrations
      python manage.py migrate
 
-The blacklist tables for logout are created here because
-rest_framework_simplejwt.token_blacklist is installed
+# 5.1. (Optional) Seed demo data for quick testing
+
+     python manage.py seed_demo
 
 # 6. Run the server:
 
@@ -122,18 +124,21 @@ rest_framework_simplejwt.token_blacklist is installed
 
        pip install djangorestframework-simplejwt django-cors-headers django-filter
 
-
-## For logout blacklist support:
-
-       pip install "djangorestframework-simplejwt[token_blacklist]"
-       pip freeze > requirements.txt
-
 # 9. Security & polish:
 
 - Restrict CORS to your frontend origin.
 - Add validation (e.g., no past deadline, file size/type check).
 - Add search/ordering params to README.
 - Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
+
+# 🔑 Logout & Token Blacklist Notes
+
+- Logout works by blacklisting refresh tokens, so they can’t be reused.  
+- This is enabled via `rest_framework_simplejwt.token_blacklist` in `INSTALLED_APPS`.  
+- **No extra pip install is required** — `djangorestframework-simplejwt` already includes the blacklist app.  
+- Just make sure migrations have been run to create the blacklist tables:
+
+       python manage.py migrate
 
 ---
 
@@ -144,7 +149,7 @@ rest_framework_simplejwt.token_blacklist is installed
 - JWT login with email/username
 - Register endpoint (dev helper)
 - Refresh endpoint
-- Logout endpoint (blacklist refresh tokens) → /api/auth/logout/ ✅
+- Logout endpoint (refresh tokens are blacklisted via `rest_framework_simplejwt.token_blacklist` → already included by default, no extra install needed) ✅
 
 # Certificates
 
