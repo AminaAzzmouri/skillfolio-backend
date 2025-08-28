@@ -12,6 +12,7 @@ class SkillfolioAPISmokeTests(APITestCase):
     - Auth: login returns access/refresh; refresh issues new access
     - Certificates: create (json + multipart) and list are owner-scoped
     - Projects: create (with/without certificate) and list are owner-scoped
+    - Goals: CRUD + validations + computed progress_percent
     - Analytics: summary returns user-scoped counts
 
     These tests intentionally focus on "does the happy path work?" rather than
@@ -160,6 +161,80 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertGreaterEqual(len(items), 2)
         titles = {p["title"] for p in items}
         self.assertTrue({"Portfolio Dashboard", "ETL Pipeline"}.issubset(titles))
+
+    # -----------------------
+    # Goals
+    # -----------------------
+    def test_goals_crud_and_progress_computation(self):
+        # Create a goal with target 2 (future deadline)
+        create_res = self.client.post(
+            "/api/goals/",
+            {"target_projects": 2, "deadline": "2099-01-01"},
+            format="json",
+        )
+        self.assertEqual(create_res.status_code, status.HTTP_201_CREATED, create_res.data)
+        goal_id = create_res.data["id"]
+        self.assertIn("progress_percent", create_res.data)
+        self.assertEqual(create_res.data["progress_percent"], 0)
+
+        # Create ONE completed project to make progress = 50%
+        _ = self.client.post(
+            "/api/projects/",
+            {
+                "title": "Completed Thing",
+                "status": "completed",
+                "description": "Done",
+            },
+            format="json",
+        )
+
+        # List goals → progress should reflect completed projects / target
+        list_res = self.client.get("/api/goals/")
+        self.assertEqual(list_res.status_code, status.HTTP_200_OK)
+        items = list_res.data if isinstance(list_res.data, list) else list_res.data.get("results", [])
+        my_goal = next((g for g in items if g["id"] == goal_id), None)
+        self.assertIsNotNone(my_goal)
+        self.assertIn("progress_percent", my_goal)
+        self.assertEqual(my_goal["progress_percent"], 50.0)
+
+        # PATCH update target to 4 → progress becomes 25.0
+        patch_res = self.client.patch(
+            f"/api/goals/{goal_id}/", {"target_projects": 4}, format="json"
+        )
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK, patch_res.data)
+        self.assertEqual(patch_res.data["target_projects"], 4)
+
+        # Re-fetch → progress should be 25.0 now
+        get_res = self.client.get(f"/api/goals/{goal_id}/")
+        self.assertEqual(get_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(get_res.data["progress_percent"], 25.0)
+
+        # DELETE the goal
+        del_res = self.client.delete(f"/api/goals/{goal_id}/")
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Ensure it's gone
+        missing = self.client.get(f"/api/goals/{goal_id}/")
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_goals_validations_negative_and_past_deadline(self):
+        # Negative target
+        res_neg = self.client.post(
+            "/api/goals/",
+            {"target_projects": -1, "deadline": "2099-12-31"},
+            format="json",
+        )
+        self.assertEqual(res_neg.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("target_projects", res_neg.data)
+
+        # Past deadline
+        res_past = self.client.post(
+            "/api/goals/",
+            {"target_projects": 3, "deadline": "2000-01-01"},
+            format="json",
+        )
+        self.assertEqual(res_past.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("deadline", res_past.data)
 
     # -----------------------
     # Analytics
