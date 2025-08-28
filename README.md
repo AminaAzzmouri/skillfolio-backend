@@ -188,7 +188,12 @@ rest_framework_simplejwt.token_blacklist is installed
 - Goals: deadline filters, searchable targets, ordered by deadline
   → Admin now useful for quick QA/debugging
 
-# - Basic API smoke tests (auth, certs, projects, analytics) ✅
+# Basic API smoke tests (auth, certs, projects, analytics) ✅
+
+# Demo data seeding (optional): 
+- provides quick demo content for testing.
+- Management command (`python manage.py seed_demo`) → idempotent, works even on an existing DB.
+- Could create a demo user + sample certificate/project/goal for fast onboarding.
 
 ---
 
@@ -219,15 +224,6 @@ rest_framework_simplejwt.token_blacklist is installed
 # Test coverage:
 
 - Expand beyond smoke tests (edge cases, permissions, validations).
-
-# Demo data seeding (optional): provide quick demo content for testing.
-
-- Options:
-
-  - JSON fixture (`fixtures/seed.json`) → easy to load on a fresh DB.
-  - Management command (`python manage.py seed_demo`) → idempotent, works even on an existing DB.
-
-- Could create a demo user + sample certificate/project/goal for fast onboarding.
 
 ---
 
@@ -761,3 +757,21 @@ python manage.py runserver
 - `DJANGO_SECRET_KEY` must be long & random. Never commit it.
 - `DJANGO_ALLOWED_HOSTS` is a comma-separated list.
 - Prefer restricting CORS via `CORS_ALLOWED_ORIGINS`. Only set `CORS_ALLOW_ALL_ORIGINS=True` for local development.
+
+---
+
+## 📦 Demo Data (optional)
+
+- You can preload demo data for quick testing:
+
+  *Option A — Fixtures (best with a fresh DB)**
+
+            python manage.py loaddata fixtures/seed.json
+
+  *Option B — Management Command (idempotent)**
+
+            python manage.py seed_demo
+
+- Creates:
+  * demo user: `demo@skillfolio.dev` / password hash preset `pass1234`
+  * 1 certificate, 1 project (linked to that certificate), and 1 goal
