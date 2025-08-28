@@ -117,6 +117,20 @@ The blacklist tables for logout are created here because
 
 ---
 
+## 🧪 Running Tests
+
+- Run the built-in API smoke tests:
+
+            python manage.py test
+
+- What’s covered:
+* Auth: login (access/refresh) and refresh flow
+* Certificates: create (json + multipart) and list (owner scoped)
+* Projects: create (with/without certificate) and list (owner scoped)
+* Analytics: /api/analytics/summary/ returns counts for the logged-in user
+
+---
+
 ## ✅ What’s Done So Far
 
 # Authentication
