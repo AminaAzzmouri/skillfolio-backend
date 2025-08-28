@@ -69,23 +69,22 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - If you add/change packages, re-freeze:
      pip freeze > requirements.txt
 
-# 5. Start the Django project:
+# 6. Start the Django project:
      django-admin startproject skillfolio_backend
 
-# 6. Apply migrations:
+# 7. Apply migrations:
      python manage.py makemigrations
      python manage.py migrate
 
 The blacklist tables for logout are created here because 
      rest_framework_simplejwt.token_blacklist is installed
 
-# 7. Run the server:
+# 8. Run the server:
      python manage.py runserver
 
-# 8. Create the users app  (if it doesn’t exist yet):
-
-#### Inside the Django project folder (where manage.py is located), run:
-     python manage.py startapp users
+# 9. (Already included) users app
+- This repo already includes a `users` app which centralizes user, certificate, project, and goal logic. 
+No need to re-create it.
 
 #### **App Explanation:**  
      The users app is the central place for user-related domain models and logic (users, certificates, projects, goals) to avoid fragmentation and simplify relationships.
@@ -100,7 +99,7 @@ The blacklist tables for logout are created here because
      'users', # <-- newly created app
      ]
 
-# 9. Install backend auth & integration deps: (JWT, CORS, filtering)
+# 10. Install backend auth & integration deps: (JWT, CORS, filtering)
 (Already covered by requirements.txt; shown here for clarity)     
 
        pip install djangorestframework-simplejwt django-cors-headers django-filter
@@ -109,25 +108,11 @@ The blacklist tables for logout are created here because
        pip install "djangorestframework-simplejwt[token_blacklist]"
        pip freeze > requirements.txt
 
-# 10. Security & polish:
+# 11. Security & polish:
   - Restrict CORS to your frontend origin.
   - Add validation (e.g., no past deadline, file size/type check).
   - Add search/ordering params to README.
   - Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
-
----
-
-## 🧪 Running Tests
-
-- Run the built-in API smoke tests:
-
-            python manage.py test
-
-- What’s covered:
-* Auth: login (access/refresh) and refresh flow
-* Certificates: create (json + multipart) and list (owner scoped)
-* Projects: create (with/without certificate) and list (owner scoped)
-* Analytics: /api/analytics/summary/ returns counts for the logged-in user
 
 ---
 
@@ -174,6 +159,8 @@ The blacklist tables for logout are created here because
 * Goals: deadline filters, searchable targets, ordered by deadline
 → Admin now useful for quick QA/debugging
 
+# - Basic API smoke tests (auth, certs, projects, analytics) ✅
+
 ---
 
 ## 🔮 What’s Next
@@ -190,7 +177,7 @@ Optional object-level permission class (extra belt-and-suspenders; current owner
  - Restrict CORS to FE origin
  - Production DB migration to MySQL/PostgreSQL
  - Add caching & performance tuning
- - Unit & integration tests
+ - Expand test coverage (unit + integration)
 
 # Admin polish (future):
 - Group fields in detail forms (Basic Info, Guided Fields, Links)
@@ -497,7 +484,7 @@ python manage.py runserver
 
 # FULL update
 
-            curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \curl -X PUT http://127.0.0.1:8000/api/projects/12/ \
+            curl -X PUT http://127.0.0.1:8000/api/projects/12/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
             -d '{
@@ -553,11 +540,6 @@ python manage.py runserver
 
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/goals/?ordering=created_at"
-
-# Order oldest → newest
-
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/projects/?ordering=date_created"
 
 # Paginate
 
@@ -645,3 +627,37 @@ python manage.py runserver
     * Certificates: newest first (-date_earned)
     * Projects: newest first (-date_created)
     * Goals: newest first (-created_at)
+- For production: set DEBUG=False, restrict ALLOWED_HOSTS, and configure CORS_ALLOWED_ORIGINS to your FE domain.
+
+---
+
+## 🧪 Running Tests
+
+- We use Django’s built-in test runner with pytest-style assertions for quick backend verification.
+
+### Run all tests:
+
+            python manage.py test
+
+- By default, Django shows . for each passing test.
+
+- What’s covered:
+* Auth: login (access/refresh) and refresh flow
+* Certificates: create (json + multipart) and list (owner scoped)
+* Projects: create (with/without certificate) and list (owner scoped)
+* Analytics: /api/analytics/summary/ returns counts for the logged-in user
+
+### Run with verbose output
+
+            python manage.py test -v 2
+
+- This will display the name + status of each test
+
+             test_create_certificate ... ok, test_login_refresh ... ok
+
+ - Recommended when recording a demo or debugging.
+
+### Notes
+- Tests live in users/tests/.
+- users/tests/__init__.py makes sure the folder is treated as a package and discovered automatically.
+- Tests create an isolated test database and do not touch your dev data.    
