@@ -1,0 +1,45 @@
+# This will:
+# - Run on every push + PR
+# - Install deps from requirements.txt
+# - Run your Django tests with verbose output (-v 2) so you get the full test names.
+
+
+name: Django Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Django tests (verbose)
+        env:
+          # Safe defaults for CI; override with real envs in a prod workflow if needed
+          DJANGO_DEBUG: "False"
+          DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+          CORS_ALLOW_ALL_ORIGINS: "False"
+        run: |
+          python manage.py test -v 2

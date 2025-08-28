@@ -1,5 +1,7 @@
 # Skillfolio Backend
 
+![Backend Tests](https://github.com/AminaAzzmouri/skillfolio-backend/actions/workflows/tests.yml/badge.svg)
+
 This is the backend of **Skillfolio**, a web application that helps self-learners archive their certificates, track skills, and connect achievements to projects.
 
 Built with **Django REST Framework**, the backend provides secure APIs for authentication, certificate management, and project linking.
@@ -702,22 +704,22 @@ python manage.py runserver
     ** Create via multipart (in-memory PDF upload).
     ** PATCH updates (e.g., title change).
     ** DELETE removes item and a follow-up GET returns 404.
-    \*\* Owner scoping proven by creating data for a second user and ensuring your list only shows your items.
+    ** Owner scoping proven by creating data for a second user and ensuring your list only shows your items.
 
   - Projects
     ** Create without a certificate.
     ** Create with a certificate.
     ** PATCH updates (status change; link/unlink a certificate).
     ** DELETE removes item and a follow-up GET returns 404.
-    \*\* Owner scoping on list.
+    ** Owner scoping on list.
 
   - Goals
     ** Full CRUD path: create → list → patch → get → delete → not found.
     ** Validations: negative target_projects and past deadline.
-    \*\* Computed field: progress_percent updates as projects are completed and as target changes.
+    ** Computed field: progress_percent updates as projects are completed and as target changes.
 
   - Analytics
-    \*\* /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
+    ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
 
   - Docs
     ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
@@ -728,6 +730,11 @@ python manage.py runserver
 - Tests live in users/tests/.
 - users/tests/**init**.py makes sure the folder is treated as a package and discovered automatically.
 - Tests create an isolated test database and do not touch your dev data.
+
+### Continuous Integration
+
+- GitHub Actions runs the test suite on every push and pull request.
+- Workflow file: `.github/workflows/tests.yml`
 
 ---
 
