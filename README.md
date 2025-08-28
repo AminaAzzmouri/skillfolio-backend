@@ -26,13 +26,15 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Interactive API docs with Swagger/OpenAPI (drf-yasg)
 - Polished Django Admin (list_display, filters, search, ordering)
 - Basic API smoke tests (auth, certs, projects, analytics)
+- Optional S3 media storage via django-storages (env toggle: USE_S3_MEDIA=True) ✅
 
 ### 🛠 Planned / Nice-to-have
 
 - Object-level permissions (extra belt-and-suspenders)
 - Goal status UX (on_track / achieved / expired)
-- More test coverage (CI already runs smoke tests on every push/PR
-- Production storage (e.g., S3) for uploads
+- More test coverage (CI already runs smoke tests on every push/PR)
+- Rate limiting / throttling for auth endpoints (DRF throttling classes)
+- Logging basics (REST errors, request IDs)
 
 ---
 
@@ -78,11 +80,13 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # 4. Install dependencies
 
-- We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT (blacklist support is built-in).
+- We keep all backend dependencies pinned in requirements.txt (includes Django, DRF, JWT auth, CORS, filtering, Swagger docs, SimpleJWT (blacklist support is built-in & (optionally) S3 storage support).
   pip install -r requirements.txt
 
 - If you add/change packages, re-freeze:
   pip freeze > requirements.txt
+
+- 
 
 # 5. Apply migrations:
 

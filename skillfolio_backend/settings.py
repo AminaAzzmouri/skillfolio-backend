@@ -1,21 +1,51 @@
 """
 settings.py — Django project configuration for Skillfolio Backend
 
-Purpose
+What this file configures
 ===============================================================================
-Centralize framework configuration:
-- Apps, middleware, DB, REST framework, JWT auth, CORS, i18n, static/media
+- Core Django app wiring (INSTALLED_APPS, MIDDLEWARE, TEMPLATES, DB)
+- REST Framework defaults (auth, permissions, filtering, pagination)
+- SimpleJWT (access/refresh tokens) + blacklist app for logout
+- CORS for FE ↔ BE requests
+- Static and media handling, including optional S3 via django-storages
 
-Key Integrations
-- REST framework defaults: authentication, permissions, filtering, pagination
-- SimpleJWT for stateless auth (access + refresh tokens)
-- SimpleJWT blacklist app to invalidate refresh tokens on logout
-- drf-yasg for Swagger UI and OpenAPI schema
-- CORS middleware for FE ↔ BE development
+How environment variables drive behavior (deployment safe)
+===============================================================================
+DJANGO_DEBUG            -> Enables dev mode when true. Defaults to True locally.
+DJANGO_SECRET_KEY       -> Required when DJANGO_DEBUG=False (production). A secure random string.
+DJANGO_ALLOWED_HOSTS    -> Comma-separated list of allowed hostnames in prod.
 
-Security
-- Never commit real production secrets to version control.
-- For production, restrict CORS and configure a hardened DB.
+CORS_ALLOW_ALL_ORIGINS  -> Quick dev toggle to allow any origin (default in dev).
+CORS_ALLOWED_ORIGINS    -> Comma-separated list of exact origins to allow in prod.
+
+USE_S3_MEDIA            -> When true, use S3 for media uploads (django-storages).
+AWS_STORAGE_BUCKET_NAME -> S3 bucket for uploads.
+AWS_S3_REGION_NAME      -> AWS region of your bucket (e.g., us-east-1).
+AWS_ACCESS_KEY_ID       -> AWS access key (omit if using instance/role creds).
+AWS_SECRET_ACCESS_KEY   -> AWS secret key (omit if using instance/role creds).
+AWS_S3_CUSTOM_DOMAIN    -> Optional CDN/CloudFront domain for media URLs.
+AWS_QUERYSTRING_AUTH    -> True to sign URLs; False for public readable objects.
+
+Why the ordering matters
+===============================================================================
+- We compute DEBUG first so that SECRET_KEY logic can enforce “prod requires a key.”
+- SECRET_KEY falls back to a dev key only when DEBUG=True.
+- ALLOWED_HOSTS and CORS read from env with dev-safe defaults so you can flip to
+  production behavior without changing code.
+
+Quick reference of important sections
+===============================================================================
+REST_FRAMEWORK          -> JWT auth, IsAuthenticated default, filtering, pagination.
+SIMPLE_JWT              -> Token lifetimes; rotation is commented but ready.
+DATABASES               -> SQLite for dev; switch to Postgres/MySQL in prod.
+S3 section              -> Only active when USE_S3_MEDIA=True; sets DEFAULT_FILE_STORAGE
+                          and MEDIA_URL accordingly.
+
+Security notes
+===============================================================================
+- Never commit real production secrets (use env vars).
+- In production: set DJANGO_DEBUG=False, configure DJANGO_ALLOWED_HOSTS and
+  CORS_ALLOWED_ORIGINS, and supply a strong DJANGO_SECRET_KEY.
 """
 
 from pathlib import Path
