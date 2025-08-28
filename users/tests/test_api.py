@@ -3,17 +3,19 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
+
 User = get_user_model()
 
 
 class SkillfolioAPISmokeTests(APITestCase):
     """
     Minimal API smoke tests proving core flows work end-to-end:
-    - Auth: login returns access/refresh; refresh issues new access
-    - Certificates: create (json + multipart) and list are owner-scoped
-    - Projects: create (with/without certificate) and list are owner-scoped
-    - Goals: CRUD + validations + computed progress_percent
-    - Analytics: summary returns user-scoped counts
+    - Auth: login returns access/refresh; refresh issues new access; logout blacklists refresh.
+    - Certificates: create (json + multipart), list owner-scoped, PATCH, DELETE (then 404).
+    - Projects: create (with/without certificate), list owner-scoped, PATCH (status/link/unlink), DELETE (then 404).
+    - Goals: CRUD + validations + computed progress_percent.
+    - Analytics: summary returns user-scoped counts.
+    - Docs: /api/docs/ and /api/schema/ are reachable (200).
 
     These tests intentionally focus on "does the happy path work?" rather than
     every edge case. They’re meant to be fast and confidence-building.
@@ -52,6 +54,26 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
         self.assertIn("access", res.data)
 
+    def test_auth_logout_blacklist_flow(self):
+        # Logout with refresh
+        res = self.client.post(
+            "/api/auth/logout/", {"refresh": self.refresh}, format="json"
+        )
+        self.assertIn(
+            res.status_code,
+            [status.HTTP_200_OK, status.HTTP_205_RESET_CONTENT],
+            res.data,
+        )
+
+        # Try refresh again → should fail
+        res2 = self.client.post(
+            "/api/auth/refresh/", {"refresh": self.refresh}, format="json"
+        )
+        self.assertIn(
+            res2.status_code,
+            [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED],
+        )
+        
     # -----------------------
     # Certificates
     # -----------------------
@@ -111,6 +133,32 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertIn("file_upload", res.data)
         self.assertTrue(str(res.data["file_upload"]).endswith(".pdf"))
 
+    def test_certificates_update_and_delete(self):
+        # Create certificate
+        create = self.client.post(
+            "/api/certificates/",
+            {"title": "Initial", "issuer": "Coursera", "date_earned": "2024-08-01"},
+            format="json",
+        )
+        cert_id = create.data["id"]
+
+        # PATCH update the title
+        patch = self.client.patch(
+            f"/api/certificates/{cert_id}/",
+            {"title": "Updated Title"},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK, patch.data)
+        self.assertEqual(patch.data["title"], "Updated Title")
+
+        # DELETE
+        delete = self.client.delete(f"/api/certificates/{cert_id}/")
+        self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
+
+        # GET should now 404
+        missing = self.client.get(f"/api/certificates/{cert_id}/")
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+
     # -----------------------
     # Projects
     # -----------------------
@@ -161,6 +209,55 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertGreaterEqual(len(items), 2)
         titles = {p["title"] for p in items}
         self.assertTrue({"Portfolio Dashboard", "ETL Pipeline"}.issubset(titles))
+
+    def test_projects_update_link_unlink_and_delete(self):
+        # Make a certificate to link
+        cert = self.client.post(
+            "/api/certificates/",
+            {
+                "title": "Backend Cert",
+                "issuer": "Coursera",
+                "date_earned": "2024-05-01",
+            },
+            format="json",
+        ).data
+
+        # Create a project
+        create = self.client.post(
+            "/api/projects/",
+            {"title": "ProjX", "status": "planned", "description": "Draft"},
+            format="json",
+        )
+        proj_id = create.data["id"]
+
+        # PATCH update status
+        patch1 = self.client.patch(
+            f"/api/projects/{proj_id}/", {"status": "completed"}, format="json"
+        )
+        self.assertEqual(patch1.status_code, status.HTTP_200_OK, patch1.data)
+        self.assertEqual(patch1.data["status"], "completed")
+
+        # Link certificate
+        patch2 = self.client.patch(
+            f"/api/projects/{proj_id}/", {"certificate": cert["id"]}, format="json"
+        )
+        self.assertEqual(patch2.status_code, status.HTTP_200_OK, patch2.data)
+        self.assertEqual(patch2.data["certificate"], cert["id"])
+
+        # Unlink certificate (set null)
+        patch3 = self.client.patch(
+            f"/api/projects/{proj_id}/", {"certificate": None}, format="json"
+        )
+        self.assertEqual(patch3.status_code, status.HTTP_200_OK, patch3.data)
+        self.assertIsNone(patch3.data["certificate"])
+
+        # DELETE
+        delete = self.client.delete(f"/api/projects/{proj_id}/")
+        self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
+
+        # GET should 404
+        missing = self.client.get(f"/api/projects/{proj_id}/")
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
 
     # -----------------------
     # Goals
@@ -268,3 +365,13 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertGreaterEqual(res.data["certificates_count"], 1)
         self.assertGreaterEqual(res.data["projects_count"], 1)
         # goals_count may be 0 if none created; just ensure key exists
+
+    # -----------------------
+    # Docs (smoke)
+    # -----------------------
+    def test_docs_and_schema_available(self):
+        docs = self.client.get("/api/docs/")
+        self.assertEqual(docs.status_code, status.HTTP_200_OK)
+
+        schema = self.client.get("/api/schema/")
+        self.assertEqual(schema.status_code, status.HTTP_200_OK)

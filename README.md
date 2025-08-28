@@ -27,6 +27,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Goal status UX (on_track / achieved / expired)
 - CI + more test coverage
 - Production storage (e.g., S3) for uploads
+
 ---
 
 ## 🛠️ Tech Stack
@@ -43,12 +44,11 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 ## 📅 Project Timeline
 
 - Week 3: Django project setup + authentication
-- Week 4: 
-      * Certificates, Projects, Goals models 
-      * APIs validations
-      * Computed progress
-      * Project guided-questions → auto-description
-      * Analytics endpoints
+- Week 4:
+  _ Certificates, Projects, Goals models
+  _ APIs validations
+  _ Computed progress
+  _ Project guided-questions → auto-description \* Analytics endpoints
 - Week 5: Testing, polish, deployment
 
 ---
@@ -56,42 +56,51 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 ## ⚡ Getting Started
 
 # Project Setup Instructions:
+
 ===========================================================================
 
 # 1. Clone repo
+
      git clone https://github.com/AminaAzzmouri/skillfolio-backend.git
 
 # 2. Create a virtual environment
+
      python -m venv venv
 
 # 3. Activate the virtual environment:
+
     - Windows: venv\Scripts\activate
     - macOS/Linux: source venv/bin/activate
 
 # 4. Install dependencies
+
 - We keep all backend dependencies pinned in requirements.txt (includes DRF, CORS, filters, SimpleJWT and the token blacklist extra for logout).
-     pip install -r requirements.txt
+  pip install -r requirements.txt
 
 - If you add/change packages, re-freeze:
-     pip freeze > requirements.txt
+  pip freeze > requirements.txt
 
 # 5. Apply migrations:
+
      python manage.py makemigrations
      python manage.py migrate
 
-The blacklist tables for logout are created here because 
-     rest_framework_simplejwt.token_blacklist is installed
+The blacklist tables for logout are created here because
+rest_framework_simplejwt.token_blacklist is installed
 
 # 6. Run the server:
+
      python manage.py runserver
 
 # 7. (Already included) users app
-- This repo already includes a `users` app which centralizes user, certificate, project, and goal logic. 
-No need to re-create it.
 
-#### **App Explanation:**  
+- This repo already includes a `users` app which centralizes user, certificate, project, and goal logic.
+  No need to re-create it.
+
+#### **App Explanation:**
+
      The users app is the central place for user-related domain models and logic (users, certificates, projects, goals) to avoid fragmentation and simplify relationships.
-      
+
      This approach simplifies relationships between models, reduces overhead in project structure, and keeps the code easier to maintain, especially in a project where all features are tightly related to users’ achievements and certificates.
 
 #### Add 'users' to INSTALLED_APPS in settings.py:
@@ -103,64 +112,76 @@ No need to re-create it.
      ]
 
 # 8. Install backend auth & integration deps: (JWT, CORS, filtering)
-(Already covered by requirements.txt; shown here for clarity)     
+
+(Already covered by requirements.txt; shown here for clarity)
 
        pip install djangorestframework-simplejwt django-cors-headers django-filter
-     
+
+
 ## For logout blacklist support:
+
        pip install "djangorestframework-simplejwt[token_blacklist]"
        pip freeze > requirements.txt
 
 # 9. Security & polish:
-  - Restrict CORS to your frontend origin.
-  - Add validation (e.g., no past deadline, file size/type check).
-  - Add search/ordering params to README.
-  - Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
+
+- Restrict CORS to your frontend origin.
+- Add validation (e.g., no past deadline, file size/type check).
+- Add search/ordering params to README.
+- Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
 
 ---
 
 ## ✅ What’s Done So Far
 
 # Authentication
-* JWT login with email/username
-* Register endpoint (dev helper)
-* Refresh endpoint
-* Logout endpoint (blacklist refresh tokens) → /api/auth/logout/ ✅
+
+- JWT login with email/username
+- Register endpoint (dev helper)
+- Refresh endpoint
+- Logout endpoint (blacklist refresh tokens) → /api/auth/logout/ ✅
 
 # Certificates
-* Model, serializer, viewset, endpoints
-* File upload support with size/type validation (≤ 5MB, PDF/Images)
-* Date validation: no future date_earned
+
+- Model, serializer, viewset, endpoints
+- File upload support with size/type validation (≤ 5MB, PDF/Images)
+- Date validation: no future date_earned
 
 # Projects
-* Model, serializer, viewset, endpoints
-* Linked to certificates (nullable)
-* Guided fields (work_type, duration_text, primary_goal, etc.)
-* Auto-generated description if blank
-* status field: planned, in_progress, completed
+
+- Model, serializer, viewset, endpoints
+- Linked to certificates (nullable)
+- Guided fields (work_type, duration_text, primary_goal, etc.)
+- Auto-generated description if blank
+- status field: planned, in_progress, completed
 
 # Goals
-* Model, serializer, viewset, endpoints
-* Validations: deadline in the future, target_projects > 0
-* Computed progress_percent included in responses
+
+- Model, serializer, viewset, endpoints
+- Validations: deadline in the future, target_projects > 0
+- Computed progress_percent included in responses
 
 # Filters / Search / Ordering
-* Certificates: filter by issuer/date, search title/issuer, order by date/title
-* Projects: filter by certificate/status, search title/description, order by date/title
-* Goals: filter by deadline, order by created_at
+
+- Certificates: filter by issuer/date, search title/issuer, order by date/title
+- Projects: filter by certificate/status, search title/description, order by date/title
+- Goals: filter by deadline, order by created_at
 
 # Analytics
-* /api/analytics/summary/ → counts of certificates, projects, goals
-* /api/analytics/goals-progress/ → list of goals with progress
+
+- /api/analytics/summary/ → counts of certificates, projects, goals
+- /api/analytics/goals-progress/ → list of goals with progress
 
 # Docs
-* Swagger docs now working (/api/docs/).
+
+- Swagger docs now working (/api/docs/).
 
 # Admin
-* Certificates: issuer/date filters, searchable title/issuer, ordered by newest
-* Projects: status/work_type filters, searchable fields, newest-first ordering
-* Goals: deadline filters, searchable targets, ordered by deadline
-→ Admin now useful for quick QA/debugging
+
+- Certificates: issuer/date filters, searchable title/issuer, ordered by newest
+- Projects: status/work_type filters, searchable fields, newest-first ordering
+- Goals: deadline filters, searchable targets, ordered by deadline
+  → Admin now useful for quick QA/debugging
 
 # - Basic API smoke tests (auth, certs, projects, analytics) ✅
 
@@ -168,25 +189,40 @@ No need to re-create it.
 
 ## 🔮 What’s Next
 
-# Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).  
-   * Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).  
-   * Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.  
-- This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
+# Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).
+
+- Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).
+- Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.
+
+* This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
 
 # Admin polish (future):
+
 - Group fields in detail forms (Basic Info, Guided Fields, Links)
 - Add inline previews for related certificates/projects
 
-# Permissions (optional): 
+# Permissions (optional):
+
 - Add an object-level permission class for extra safety on top of owner scoping
 
 # Deployment hardening:
- - Restrict CORS to FE origin
- - Production DB migration to MySQL/PostgreSQL
- - Add caching & performance tuning
+
+- Restrict CORS to FE origin
+- Production DB migration to MySQL/PostgreSQL
+- Add caching & performance tuning
 
 # Test coverage:
+
 - Expand beyond smoke tests (edge cases, permissions, validations).
+
+# Demo data seeding (optional): provide quick demo content for testing.
+
+- Options:
+
+  - JSON fixture (`fixtures/seed.json`) → easy to load on a fresh DB.
+  - Management command (`python manage.py seed_demo`) → idempotent, works even on an existing DB.
+
+- Could create a demo user + sample certificate/project/goal for fast onboarding.
 
 ---
 
@@ -203,114 +239,110 @@ Base URL (local): http://127.0.0.1:8000
 | `/api/auth/login/`    | `POST`  | ❌   | JWT login (email or username). Returns `{ "access", "refresh" }`.                           |
 | `/api/auth/refresh/`  | `POST`  | ❌   | Exchange refresh for a new access token.                                                    |
 
-
 - Login body examples:  
-          { "email": "you@example.com", "password": "pass1234" }
-- Or:     
-          { "username": "you@example.com", "password": "pass1234" }
+   { "email": "you@example.com", "password": "pass1234" }
+- Or:  
+   { "username": "you@example.com", "password": "pass1234" }
 
 - Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
 
+**Certificates**: Base: /api/certificates/
 
-**Certificates**:  Base: /api/certificates/
+- Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
+- Search: ?search=<substring> ( matches title, issuer)
+- Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
 
-* Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
-* Search: ?search=<substring> ( matches title, issuer)
-* Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
+- Default ordering: newest first (-date_earned)
 
-* Default ordering: newest first (-date_earned)
-
-| Operation     | Method      | URL                       | Body                                  | Notes                                  |
-| ------------- | ----------- | ------------------------- | ------------------------------------- | -------------------------------------- |
-| List          | `GET`       | `/api/certificates/       | —                                     | Returns only the authenticated user’s certificates.                          |
-| Retrieve      | `GET`       | `/api/certificates/{id}/` |                                       |                                        |
-| Create (JSON) | `POST`      | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`| `file_upload` optional (multipart).    |
-| Create (file) | `POST`      | `/api/certificates/`      | multipart fields: `title`, `issuer`,  `date_earned`, `file_upload=@path`   | Requires `Content-Type: multipart/form-data`.    |
-| Update        | `PUT/PATCH` | `/api/certificates/{id}/` | JSON or multipart                     |                                        |
-| Delete        | `DELETE`    | `/api/certificates/{id}/` | —                                     |                                        |
-
+| Operation     | Method      | URL                       | Body                                                                    | Notes                                               |
+| ------------- | ----------- | ------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
+| List          | `GET`       | `/api/certificates/       | —                                                                       | Returns only the authenticated user’s certificates. |
+| Retrieve      | `GET`       | `/api/certificates/{id}/` |                                                                         |                                                     |
+| Create (JSON) | `POST`      | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`                                  | `file_upload` optional (multipart).                 |
+| Create (file) | `POST`      | `/api/certificates/`      | multipart fields: `title`, `issuer`, `date_earned`, `file_upload=@path` | Requires `Content-Type: multipart/form-data`.       |
+| Update        | `PUT/PATCH` | `/api/certificates/{id}/` | JSON or multipart                                                       |                                                     |
+| Delete        | `DELETE`    | `/api/certificates/{id}/` | —                                                                       |                                                     |
 
 **Projects**: Base: /api/projects/
 
-* Filter: ?certificate=<id>&status=<planned|in_progress|completed>
-* Search: ?search=<substring> (matches title, description)
-* Ordering: ordering=date_created or ?ordering=-date_created (also title)
-* Pagination: ?page=1
+- Filter: ?certificate=<id>&status=<planned|in_progress|completed>
+- Search: ?search=<substring> (matches title, description)
+- Ordering: ordering=date_created or ?ordering=-date_created (also title)
+- Pagination: ?page=1
 
-* Default newest first (-date_created)
-* Auto-description: If description is blank on create, BE generates one from guided fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
+- Default newest first (-date_created)
+- Auto-description: If description is blank on create, BE generates one from guided fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve).
 
-| Operation | Method      | URL                   | Body                                     | Notes                                           |
-| --------- | ----------- | --------------------- | ---------------------------------------- | ----------------------------------------------- |
-| List      | `GET`       | `/api/projects/`      | —                                        | Returns only the authenticated user’s projects. |
-| Retrieve  | `GET`       | `/api/projects/{id}/` | —                                        |                                                 |
-| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate": <id or null> }`| `certificate` is optional, ⚡Auto-description: If `description` is blank, the backend composes one from guided-question  fields (work_type, duration_text, primary_goal,  challenges_short, skills_used, outcome_short, skills_to_improve).   |                                                                                                
-| Update    | `PUT/PATCH` | `/api/projects/{id}/` | JSON                                     |                                                 |
-| Delete    | `DELETE`    | `/api/projects/{id}/` | —                                        |                                                 |
+| Operation | Method      | URL                   | Body                                                      | Notes                                                                                                                                                                                                                                     |
+| --------- | ----------- | --------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List      | `GET`       | `/api/projects/`      | —                                                         | Returns only the authenticated user’s projects.                                                                                                                                                                                           |
+| Retrieve  | `GET`       | `/api/projects/{id}/` | —                                                         |                                                                                                                                                                                                                                           |
+| Create    | `POST`      | `/api/projects/`      | `{ "title", "description", "certificate": <id or null> }` | `certificate` is optional, ⚡Auto-description: If `description` is blank, the backend composes one from guided-question fields (work_type, duration_text, primary_goal, challenges_short, skills_used, outcome_short, skills_to_improve). |
+| Update    | `PUT/PATCH` | `/api/projects/{id}/` | JSON                                                      |                                                                                                                                                                                                                                           |
+| Delete    | `DELETE`    | `/api/projects/{id}/` | —                                                         |                                                                                                                                                                                                                                           |
 
-
-        
 **Goals**: Base: /api/goals/
 
-* Filter: ?deadline=<YYYY-MM-DD>
-* Ordering: ?ordering=created_at or ?ordering=-created_at
-* Pagination: ?page=1
+- Filter: ?deadline=<YYYY-MM-DD>
+- Ordering: ?ordering=created_at or ?ordering=-created_at
+- Pagination: ?page=1
 
-* Default ordering: newest first (-created_at)
-* Field: progress_percent Computed (read-only)
+- Default ordering: newest first (-created_at)
+- Field: progress_percent Computed (read-only)
 
-| Operation | Method      | URL                | Body                                | Notes                                        |
-| --------- | ----------- | ------------------ | ----------------------------------- | -------------------------------------------- |
+| Operation | Method      | URL                | Body                                | Notes                                                                   |
+| --------- | ----------- | ------------------ | ----------------------------------- | ----------------------------------------------------------------------- |
 | List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. Includes progress_percent. |
-| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                              |
-| Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`. Validates positive target and future date. |
-| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                              |
-| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                              |
+| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                                                         |
+| Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`. Validates positive target and future date.  |
+| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                                                         |
+| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                                                         |
 
 ---
 
 ## 📖 API Documentation (Swagger / drf-yasg)
 
-1. What we already have:
-     * /api/docs/ → interactive API docs. 
-       Lists all endpoints (certificates, projects, goals, auth, analytics, logout).
+1.  What we already have:
 
-     * You can try requests directly from the browser by pasting Bearer <ACCESS_TOKEN> into the “Authorize” button.
+    - /api/docs/ → interactive API docs.
+      Lists all endpoints (certificates, projects, goals, auth, analytics, logout).
 
-     * /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
+    - You can try requests directly from the browser by pasting Bearer <ACCESS_TOKEN> into the “Authorize” button.
 
-2. What extra annotations could add:
-Currently, Swagger auto-generates docs from ViewSets and serializers. If we add @swagger_auto_schema decorators, we can:
+    - /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
 
-     * Group endpoints with tags → e.g., put login/logout/register under Auth.
+2.  What extra annotations could add:
+    Currently, Swagger auto-generates docs from ViewSets and serializers. If we add @swagger_auto_schema decorators, we can:
 
-     * Add descriptions → clear human-friendly explanations for each operation.
+         * Group endpoints with tags → e.g., put login/logout/register under Auth.
 
-     * Customize schemas → define exact input/output when auto-detection is imperfect.
+         * Add descriptions → clear human-friendly explanations for each operation.
+
+         * Customize schemas → define exact input/output when auto-detection is imperfect.
 
 Example:
-     @swagger_auto_schema(
-    tags=["Auth"],
-    operation_description="Login with email + password. Returns access and refresh JWT tokens."
-     )
-     def post(self, request, *args, **kwargs):
-     ...
+@swagger_auto_schema(
+tags=["Auth"],
+operation_description="Login with email + password. Returns access and refresh JWT tokens."
+)
+def post(self, request, \*args, \*\*kwargs):
+...
 
 3. Why this matters
 
-     * Frontend devs & testers → instantly know what each endpoint expects.
-     * Contributors → clearer reference if the API is ever made public.
-     * Future me → easy reminder of inputs/outputs after a break.
+   - Frontend devs & testers → instantly know what each endpoint expects.
+   - Contributors → clearer reference if the API is ever made public.
+   - Future me → easy reminder of inputs/outputs after a break.
 
 ✅ In short:
- /api/docs/ already works well.
- Adding annotations is optional, but makes the docs prettier, grouped, and self-explanatory.
+/api/docs/ already works well.
+Adding annotations is optional, but makes the docs prettier, grouped, and self-explanatory.
 
 ---
 
-## 🔍 Quick cURL Examples: 
+## 🔍 Quick cURL Examples:
 
-python manage.py collectstatic --noinput  # (harmless; if STATIC configured)
+python manage.py collectstatic --noinput # (harmless; if STATIC configured)
 python manage.py migrate
 python manage.py runserver
 
@@ -319,23 +351,25 @@ python manage.py runserver
             curl -X POST http://127.0.0.1:8000/api/auth/register/ \
             -H "Content-Type: application/json" \
             -d '{"email":"you@example.com","password":"pass1234"}'
-  
+
           Returns the new user’s id/username/email (email is used as the username).
-  
-       
+
+
+
 # 2) Login → get access/refresh
 
             curl -X POST http://127.0.0.1:8000/api/auth/login/ \
             -H "Content-Type: application/json" \
             -d '{"username":"you@example.com","password":"pass1234"}'
 
-- You’ll receive { "access": "...", "refresh": "..." }. 
+- You’ll receive { "access": "...", "refresh": "..." }.
+
 * access → short-lived token for Authorization headers.
 * refresh → longer-lived token you can use at /api/auth/refresh/.
-  
+
 - Use Authorization: Bearer <ACCESS_TOKEN> for protected endpoints.
 
-- With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals. 
+- With the access token, you can call GET /api/certificates/, POST /api/certificates/ (for creation), and similar endpoints for projects and goals.
   Because the viewsets use OwnerScopedModelViewSet, each user sees only their own certificates/projects/goals.
 
 - Renew when expired
@@ -429,10 +463,10 @@ python manage.py runserver
 
 - GET the created project and you should see a description like:
 
-            “Portfolio Dashboard was a team project completed in 2 weeks. The main goal was 
-            to deliver a functional feature. It addressed: Visualize certificate progress in 
-            one place. Key tools/skills: React, Django, DRF, React, Zustand, Tailwind. Outcome: 
-            Shipped a responsive dashboard showing live stats. Next, I plan to improve: Test 
+            “Portfolio Dashboard was a team project completed in 2 weeks. The main goal was
+            to deliver a functional feature. It addressed: Visualize certificate progress in
+            one place. Key tools/skills: React, Django, DRF, React, Zustand, Tailwind. Outcome:
+            Shipped a responsive dashboard showing live stats. Next, I plan to improve: Test
             coverage and CI.”
 
 - (If you provide `description` in POST/PUT, we keep the provided text.)
@@ -441,7 +475,6 @@ python manage.py runserver
 
             curl -H http://127.0.0.1:8000/api/projects/
             "Authorization: Bearer <ACCESS>"
-
 
 - You should only see your objects in list/detail views.
 
@@ -507,7 +540,7 @@ python manage.py runserver
             -H "Authorization: Bearer <ACCESS>"
 
 # 5) Goals
-    
+
 # Create
 
             url -X POST http://127.0.0.1:8000/api/goals/ \
@@ -515,21 +548,20 @@ python manage.py runserver
             -H "Content-Type: application/json" \
             -d '{"target_projects": 5, "deadline": "2025-12-31"}'
 
-
 # List Progress_percent for goal settings
 
             curl http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer ACCESS_TOKEN_HERE"
 
 - You should see:
-            {
-               "id": 3,
-               "target_projects": 5,
-               "deadline": "2025-12-31",
-               "created_at": "2025-08-23T10:55:41Z",
-               "progress_percent": 20.0,   // computed from completed projects
-               "user": 1
-            }
+  {
+  "id": 3,
+  "target_projects": 5,
+  "deadline": "2025-12-31",
+  "created_at": "2025-08-23T10:55:41Z",
+  "progress_percent": 20.0, // computed from completed projects
+  "user": 1
+  }
 
 # Filter by deadline
 
@@ -589,16 +621,16 @@ python manage.py runserver
 
 # Summary counts
 
-            curl -H "Authorization: Bearer <ACCESS>" 
+            curl -H "Authorization: Bearer <ACCESS>"
             http://127.0.0.1:8000/api/analytics/summary/
- 
+
             → Expected: {"certificates_count": 2, "projects_count": 5, "goals_count": 1}
 
 # Goals with progress
 
-            curl -H "Authorization: Bearer <ACCESS>" 
+            curl -H "Authorization: Bearer <ACCESS>"
             http://127.0.0.1:8000/api/analytics/goals-progress/
-            
+
             → Expected:  [{"id": 3, "target_projects": 5, "progress_percent": 40.0, ...}]
 
 # 7) Logout (refresh-token blacklist)
@@ -607,8 +639,9 @@ python manage.py runserver
             -H "Authorization: Bearer <ACCESS_TOKEN>" \
             -H "Content-Type: application/json" \
             -d '{"refresh": "<REFRESH_TOKEN>"}'
-            
-- Expected:  {"detail":"Successfully logged out."}
+
+
+- Expected: {"detail":"Successfully logged out."}
 
             - Try to refresh again with the same refresh -> should now fail
             curl -X POST http://127.0.0.1:8000/api/auth/refresh/ \
@@ -624,9 +657,9 @@ python manage.py runserver
 - All resources are scoped per user (you only ever see your own objects).
 - Pagination enabled → use ?page=N.
 - Default ordering:
-    * Certificates: newest first (-date_earned)
-    * Projects: newest first (-date_created)
-    * Goals: newest first (-created_at)
+  - Certificates: newest first (-date_earned)
+  - Projects: newest first (-date_created)
+  - Goals: newest first (-created_at)
 - For production: set DEBUG=False, restrict ALLOWED_HOSTS, and configure CORS_ALLOWED_ORIGINS to your FE domain.
 
 ---
@@ -641,12 +674,6 @@ python manage.py runserver
 
 - By default, Django shows . for each passing test.
 
-- What’s covered:
-* Auth: login (access/refresh) and refresh flow
-* Certificates: create (json + multipart) and list (owner scoped)
-* Projects: create (with/without certificate) and list (owner scoped)
-* Analytics: /api/analytics/summary/ returns counts for the logged-in user
-
 ### Run with verbose output
 
             python manage.py test -v 2
@@ -655,7 +682,7 @@ python manage.py runserver
 
              test_create_certificate ... ok, test_login_refresh ... ok
 
- - Recommended when recording a demo or debugging.
+- Recommended when recording a demo or debugging.
 
 ### Run a single test (by dotted path)
 
@@ -663,10 +690,44 @@ python manage.py runserver
 
 - This prints the test name and status, great for demos.
 
+- What’s covered:
+
+  - Auth
+    ** Login returns access + refresh.
+    ** Refresh exchanges a refresh for a new access token.
+    \*\* Logout blacklists the refresh (subsequent refresh fails).
+
+  - Certificates
+    ** Create via JSON.
+    ** Create via multipart (in-memory PDF upload).
+    ** PATCH updates (e.g., title change).
+    ** DELETE removes item and a follow-up GET returns 404.
+    \*\* Owner scoping proven by creating data for a second user and ensuring your list only shows your items.
+
+  - Projects
+    ** Create without a certificate.
+    ** Create with a certificate.
+    ** PATCH updates (status change; link/unlink a certificate).
+    ** DELETE removes item and a follow-up GET returns 404.
+    \*\* Owner scoping on list.
+
+  - Goals
+    ** Full CRUD path: create → list → patch → get → delete → not found.
+    ** Validations: negative target_projects and past deadline.
+    \*\* Computed field: progress_percent updates as projects are completed and as target changes.
+
+  - Analytics
+    \*\* /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
+
+  - Docs
+    ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
+    ** /api/docs/ and /api/schema/ both return 200.
+
 ### Notes
+
 - Tests live in users/tests/.
-- users/tests/__init__.py makes sure the folder is treated as a package and discovered automatically.
-- Tests create an isolated test database and do not touch your dev data.    
+- users/tests/**init**.py makes sure the folder is treated as a package and discovered automatically.
+- Tests create an isolated test database and do not touch your dev data.
 
 ---
 
