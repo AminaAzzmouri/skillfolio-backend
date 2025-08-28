@@ -230,6 +230,15 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 - Expand beyond smoke tests (edge cases, permissions, validations).
 
+# Swagger annotations 
+(@swagger_auto_schema) for nicer grouping/descriptions.
+
+# Rate limiting / throttling for auth endpoints (DRF throttling classes).
+
+# Logging basics (REST errors, request IDs).
+
+# File storage for prod (S3 or similar) if you want stretch goals.
+
 ---
 
 ## 📌 API Quick Reference:
@@ -724,9 +733,8 @@ python manage.py runserver
 
   - Analytics
     ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
-
-  - Docs
-    ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.
+    
+  - Docs    
     ** /api/docs/ and /api/schema/ both return 200.
 
 ### Notes
