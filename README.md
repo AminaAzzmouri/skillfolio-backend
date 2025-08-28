@@ -86,8 +86,6 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - If you add/change packages, re-freeze:
   pip freeze > requirements.txt
 
-- 
-
 # 5. Apply migrations:
 
      python manage.py makemigrations
