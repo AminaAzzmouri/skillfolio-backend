@@ -791,3 +791,24 @@ python manage.py runserver
 - Creates:
   * demo user: `demo@skillfolio.dev` / password hash preset `pass1234`
   * 1 certificate, 1 project (linked to that certificate), and 1 goal
+
+---
+
+ ### 📦 S3 Media (optional, production)
+
+- To serve uploads from S3, set:
+
+            USE_S3_MEDIA=True
+            AWS_STORAGE_BUCKET_NAME=your-bucket
+            AWS_S3_REGION_NAME=us-east-1
+
+# If not using instance role:
+
+            AWS_ACCESS_KEY_ID=...
+            AWS_SECRET_ACCESS_KEY=...
+
+# Optional CDN/CloudFront:
+            AWS_S3_CUSTOM_DOMAIN=cdn.skillfolio.example.com
+
+  * Make the bucket public or keep private with signed URLs (AWS_QUERYSTRING_AUTH=True).
+  * If using CloudFront, set AWS_S3_CUSTOM_DOMAIN to your distribution domain.
