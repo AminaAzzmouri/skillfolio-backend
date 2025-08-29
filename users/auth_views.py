@@ -9,8 +9,8 @@ Provide a focused module for authentication endpoints:
 - Logout (blacklist a submitted refresh token to invalidate future use)
 
 Why a dedicated file?
-- Keeps auth concerns separate from domain ViewSets (certificates/projects/goals),
-  making each module easier to reason about and test.
+- Keeps auth concerns separate from domain ViewSets (certificates/projects/goals).
+- Makes the codebase to reason about and test.
 
 Endpoints (wired in root urls.py)
 - POST /api/auth/login/    → returns {"access": "...", "refresh": "..."}
@@ -20,8 +20,14 @@ Endpoints (wired in root urls.py)
 
 Security Notes
 - Logout requires SimpleJWT blacklist tables; ensure
-  'rest_framework_simplejwt.token_blacklist' is in INSTALLED_APPS and migrations run.
+  'rest_framework_simplejwt.token_blacklist' is in INSTALLED_APPS and migrated.
+
+Swagger notes
+- This module adds drf-yasg annotations so /api/docs/ shows request bodies for:
+  * register (email + password)
+  * logout (refresh token)
 """
+
 
 from django.contrib.auth import get_user_model
 from rest_framework import status, permissions, serializers
@@ -33,6 +39,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+# Swagger tools
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from .serializers import RegisterSerializer  # so Swagger knows the register body
 
 # -----------------------------------------------------------------------------
 # Email-based login
@@ -62,6 +72,16 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     Response: {"refresh": "...", "access": "..."}
     """
     serializer_class = EmailTokenObtainPairSerializer
+    
+    
+EmailTokenObtainPairView.__doc__ = """
+    POST /api/auth/login/
+    Body: {"email": "...", "password": "..."} OR {"username": "...", "password": "..."}
+    Response: {"refresh": "...", "access": "..."}
+"""
+
+EmailTokenObtainPairView.tags = ["Auth"]  # drf-yasg will group it under "Auth"
+
 
 
 # -----------------------------------------------------------------------------
@@ -69,7 +89,19 @@ class EmailTokenObtainPairView(TokenObtainPairView):
 # -----------------------------------------------------------------------------
 User = get_user_model()
 
-
+@swagger_auto_schema(
+    method='post',
+    tags=["Auth"],
+    operation_description="Register a new user with email + password. Returns a minimal confirmation payload.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            "email": openapi.Schema(type=openapi.TYPE_STRING, format="email"),
+            "password": openapi.Schema(type=openapi.TYPE_STRING, format="password"),
+            }),   # shows email + password fields in /api/docs
+    responses={201: "User Created", 400: "Invalid Input"},
+    security=[],  # public endpoint; no Bearer required
+)
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def register(request):
@@ -79,18 +111,23 @@ def register(request):
 
     Behavior
     - Creates a Django user using the supplied email as both username and email.
-    - Returns a minimal representation suitable for local development.
+    - Returns 201 with a minimal confirmation (can be expanded later).
     - In production, add email verification, password strength checks, etc.
     """
     email = request.data.get("email")
     password = request.data.get("password")
+   
+    User = get_user_model()
+   
     if not email or not password:
         return Response({"detail": "email and password required"}, status=status.HTTP_400_BAD_REQUEST)
-
+    
     if User.objects.filter(username=email).exists():
-        return Response({"detail": "user already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
     user = User.objects.create_user(username=email, email=email, password=password)
+    user.save()
+    
     return Response(
         {"id": user.id, "username": user.username, "email": user.email},
         status=status.HTTP_201_CREATED
@@ -100,6 +137,20 @@ def register(request):
 # -----------------------------------------------------------------------------
 # Logout (server-side invalidation via refresh-token blacklist)
 # -----------------------------------------------------------------------------
+logout_request_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    required=["refresh"],
+    properties={
+        "refresh": openapi.Schema(type=openapi.TYPE_STRING, description="Refresh token to blacklist")
+    },
+)
+@swagger_auto_schema(
+    method='post',
+    tags=["Auth"],
+    operation_description="Blacklist a submitted refresh token to invalidate future use.",
+    request_body=logout_request_schema,
+    responses={205: "Reset Content", 400: "Bad Request"},
+)
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def logout(request):

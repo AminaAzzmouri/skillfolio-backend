@@ -9,6 +9,7 @@ What this file configures
 - CORS for FE ↔ BE requests
 - Static + media handling, including optional S3 via django-storages
 - Production serving of static via WhiteNoise
+- **Swagger (drf-yasg) configured to use Bearer tokens in the Authorize dialog**  ← NEW
 
 How environment variables drive behavior (deployment-safe)
 ===============================================================================
@@ -40,6 +41,9 @@ DATABASES       -> SQLite in dev; you can wire DATABASE_URL to Postgres in prod.
 Static files    -> STATIC_ROOT + WhiteNoise for production static serving.
 S3 section      -> Activated when USE_S3_MEDIA=True; sets DEFAULT_FILE_STORAGE
                    and MEDIA_URL accordingly.
+Swagger (drf-yasg)
+- SWAGGER_SETTINGS sets a Bearer security scheme and disables session auth,
+  so the Authorize button accepts “Bearer <access-token>”.                 ← NEW
 
 Deployment notes (Render-friendly)
 ===============================================================================
@@ -57,6 +61,7 @@ Deployment notes (Render-friendly)
     CORS_ALLOW_ALL_ORIGINS=True   (for quick tests)  OR
     CORS_ALLOW_ALL_ORIGINS=False + CORS_ALLOWED_ORIGINS=<https://your-fe.example.com>
 """
+
 
 from pathlib import Path
 from datetime import timedelta
@@ -135,6 +140,21 @@ INSTALLED_APPS = [
     # Local apps
     'users',
 ]
+
+
+
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": False,  # hide Django session login in the docs
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Paste: Bearer <access-token>",
+        }
+    },
+} # <- used by drf-yasg to render the Authorize dialog as Bearer
+
 
 MIDDLEWARE = [
     # CORS should be as high as possible

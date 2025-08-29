@@ -21,6 +21,26 @@ from datetime import date
 from .models import Certificate, Project, Goal, Project as ProjectModel
 
 
+class RegisterSerializer(serializers.Serializer):
+    """
+    RegisterSerializer
+    =============================================================================
+    Purpose
+    - Document the request body for the public registration endpoint so
+      Swagger (drf-yasg) can render a proper form in /api/docs/.
+
+    Fields
+    - email: Email address that becomes the username.
+    - password: Plain text on input; your view sets it securely via set_password().
+
+    Notes
+    - This is NOT a ModelSerializer on purpose; it only describes the input.
+    """
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=4)  # tweak min length as desired
+
+
+
 class CertificateSerializer(serializers.ModelSerializer):
     """
     CertificateSerializer
