@@ -21,6 +21,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Upload and manage certificates (PDF, with metadata: title, date)
 - CRUD for achievements (Certificates, Projects, Goals)
 - Link projects to certificates (guided fields + auto-generated description)
+- Goal checklists: named steps (create/check/reorder) + per-goal checklist progress; admin inline editor; new /api/goalsteps/ endpoints
 - Set and track learning goals (with deadlines, validations, and progress tracking)
 - Filtering / search / ordering across list endpoints (see Quick Reference)
 - Analytics endpoints for dashboard summary & goal progress (frontend)
@@ -54,10 +55,10 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 - Week 3: Django project setup + authentication
 - Week 4:
-  _ Certificates, Projects, Goals models
-  _ APIs validations
-  _ Computed progress
-  _ Project guided-questions → auto-description \* Analytics endpoints
+  _ Certificates, Projects, Goals (+ GoalSteps) models
+  _ API validations & computed progress (projects vs target; checklist-based)
+  _ Project guided-questions → auto-description
+  _ Analytics endpoints (summary, goals progress)
 - Week 5: Testing, polish, deployment
 
 ---
@@ -172,8 +173,12 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 # Goals
 
 - Model, serializer, viewset, endpoints
-- Validations: deadline in the future, target_projects > 0
-- Computed progress_percent included in responses
+- Fields: title, target_projects, deadline, total_steps, completed_steps
+- Validations: deadline in the future, target_projects > 0; checklist fields clamped
+- Computed fields:
+  * progress_percent — from completed projects vs target_projects
+  * steps_progress_percent — from checklist (completed_steps / total_steps)
+- NEW GoalSteps (named checklist items): /api/goalsteps/ (CRUD), owner-scoped
 
 # Filters / Search / Ordering
 
@@ -194,8 +199,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 - Certificates: issuer/date filters, searchable title/issuer, ordered by newest
 - Projects: status/work_type filters, searchable fields, newest-first ordering
-- Goals: deadline filters, searchable targets, ordered by deadline
-  → Admin now useful for quick QA/debugging
+- Goals: title, target/deadline + checklist fields (total_steps, completed_steps), computed steps progress column; inline GoalStep rows; ordered by deadline
+  → Admin is now great for quick QA/debugging of goal checklists
 
 # Basic API smoke tests (auth, certs, projects, analytics) ✅
 
@@ -311,19 +316,41 @@ Base URL (local): http://127.0.0.1:8000
 **Goals**: Base: /api/goals/
 
 - Filter: ?deadline=<YYYY-MM-DD>
-- Ordering: ?ordering=created_at or ?ordering=-created_at
+- Ordering: ?ordering=created_at | -created_at | deadline | -deadline | total_steps | -total_steps | completed_steps | -completed_steps
 - Pagination: ?page=1
 
 - Default ordering: newest first (-created_at)
-- Field: progress_percent Computed (read-only)
+- Fields:
+  * title (string)
+  * target_projects (int, >0)
+  * deadline (date)
+  * total_steps (int, default 0)
+  * completed_steps (int, default 0)
+- Computed (read-only):
+  * `progress_percent` (read-only): completed projects vs `target_projects`
+  * `steps_progress_percent` (read-only): `completed_steps / total_steps * 100`
 
-| Operation | Method      | URL                | Body                                | Notes                                                                   |
-| --------- | ----------- | ------------------ | ----------------------------------- | ----------------------------------------------------------------------- |
-| List      | `GET`       | `/api/goals/`      | —                                   | Returns only the authenticated user’s goals. Includes progress_percent. |
-| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                   |                                                                         |
-| Create    | `POST`      | `/api/goals/`      | `{ "target_projects", "deadline" }` | `deadline` is `YYYY-MM-DD`. Validates positive target and future date.  |
-| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                |                                                                         |
-| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                   |                                                                         |
+
+| Operation | Method      | URL                | Body                                                                 | Notes                                                                                     |
+| --------- | ----------- | ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| List      | `GET`       | `/api/goals/`      | —                                                                    | Returns only the authenticated user’s goals. Includes computed progress fields.           |
+| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                                                    |                                                                                           |
+| Create    | `POST`      | `/api/goals/`      | `{ "title","target_projects","deadline","total_steps?","completed_steps?" }` | `deadline` is `YYYY-MM-DD`. Checklist fields optional (default 0).                        |
+| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                                                 | You can edit title/target/deadline and checklist counts.                                  |
+| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                                                    |                                                                                           |
+
+**GoalSteps**: Base: /api/goalsteps/
+
+- Named checklist items attached to a goal.
+- Typical workflow: create steps → toggle `is_done` as you progress → reorder with `order` if desired.
+- All endpoints are owner-scoped via the parent goal.
+
+| Operation | Method      | URL                      | Body                                       | Notes                               |
+| --------- | ----------- | ------------------------ | ------------------------------------------ | ----------------------------------- |
+| List      | `GET`       | `/api/goalsteps/`        | —                                          | Use `?goal=<goal_id>` to filter.    |
+| Create    | `POST`      | `/api/goalsteps/`        | `{ "goal": <id>, "title", "is_done?", "order?" }` | `is_done` default false, `order` int |
+| Update    | `PUT/PATCH` | `/api/goalsteps/{id}/`   | `{ "title?" , "is_done?", "order?" }`      | Toggle `is_done` with PATCH.         |
+| Delete    | `DELETE`    | `/api/goalsteps/{id}/`   | —                                          |                                     |
 
 ---
 
@@ -594,44 +621,104 @@ python manage.py runserver
 
 # 5) Goals
 
-# Create
+# Create (with a title and optional checklist counts)
 
-            url -X POST http://127.0.0.1:8000/api/goals/ \
+            curl -X POST http://127.0.0.1:8000/api/goals/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
-            -d '{"target_projects": 5, "deadline": "2025-12-31"}'
+            -d '{"title":"Ship portfolio v1","target_projects":5,"deadline":"2025-12-31","total_steps":4,"completed_steps":1}'
 
 # List Progress_percent for goal settings
 
             curl http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer ACCESS_TOKEN_HERE"
+            -H "Authorization: Bearer <ACCESS_TOKEN_HERE>"
 
-- You should see:
-  {
-  "id": 3,
-  "target_projects": 5,
-  "deadline": "2025-12-31",
-  "created_at": "2025-08-23T10:55:41Z",
-  "progress_percent": 20.0, // computed from completed projects
-  "user": 1
-  }
+- Example list item (truncated)
+            {
+              "id": 3,
+              "title": "Ship portfolio v1",
+              "target_projects": 5,
+              "deadline": "2025-12-31",
+              "total_steps": 4,
+              "completed_steps": 1,
+              "steps_progress_percent": 25,
+              "progress_percent": 20.0,   // from completed projects vs target
+              "created_at": "2025-08-23T10:55:41Z",
+              "user": 1
+            }
 
 # Filter by deadline
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
             "http://127.0.0.1:8000/api/goals/?deadline=2025-12-31"
 
 # Order oldest → newest
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
             "http://127.0.0.1:8000/api/goals/?ordering=created_at"
 
 # Paginate
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
             "http://127.0.0.1:8000/api/goals/?page=2"
 
-# Goal Settings validations
+
+# Partial Update (e.g., bump completed steps)
+
+            curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"completed_steps": 2}'
+
+# Full Update
+
+            curl -X PUT http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"title":"New Title","target_projects":12,"deadline":"2025-12-31","total_steps":6,"completed_steps":3}'
+
+# DELETE:
+
+            curl -X DELETE http://127.0.0.1:8000/api/goals/7/ \
+            -H "Authorization: Bearer <ACCESS>"
+
+### Goal Steps (checklist items)
+
+# Create a step
+
+            curl -X POST http://127.0.0.1:8000/api/goalsteps/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"goal":7,"title":"Write outline","order":1}'
+
+# List steps for a goal
+
+            curl -H "Authorization: Bearer <ACCESS>" \
+            "http://127.0.0.1:8000/api/goalsteps/?goal=7"
+
+# Toggle a step as done
+
+            curl -X PATCH http://127.0.0.1:8000/api/goalsteps/15/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"is_done": true}'
+
+# Reorder a step (optional)
+
+            curl -X PATCH http://127.0.0.1:8000/api/goalsteps/15/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"order": 2}'
+
+# Delete a step
+
+            curl -X DELETE http://127.0.0.1:8000/api/goalsteps/15/ \
+            -H "Authorization: Bearer <ACCESS>"
+
+- Note: Creating/updating/deleting GoalSteps automatically keeps a goal’s `total_steps` / `completed_steps` in sync, and `steps_progress_percent` updates accordingly.
+
+
+### Goal Settings validations
 
 - Negative target:
 
@@ -650,25 +737,6 @@ python manage.py runserver
             -d '{"target_projects": 3, "deadline": "2000-01-01"}'
 
             → Expected: {"deadline": ["deadline cannot be in the past."]}
-
-# Partial Update
-
-            curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
-            -H "Authorization: Bearer <ACCESS>" \
-            -H "Content-Type: application/json" \
-            -d '{"target_projects": 10}'
-
-# Full Update
-
-            curl -X PUT http://127.0.0.1:8000/api/goals/7/ \
-            -H "Authorization: Bearer <ACCESS>" \
-            -H "Content-Type: application/json" \
-            -d '{"target_projects": 12, "deadline": "2025-12-31"}'
-
-# DELETE:
-
-            curl -X DELETE http://127.0.0.1:8000/api/goals/7/ \
-            -H "Authorization: Bearer <ACCESS>"
 
 # 6) Analytics
 
@@ -712,7 +780,7 @@ python manage.py runserver
 - Default ordering:
   - Certificates: newest first (-date_earned)
   - Projects: newest first (-date_created)
-  - Goals: newest first (-created_at)
+  - Goals: newest first (-created_at). Ordering supports deadline and checklist fields.
 - For production: set DEBUG=False, restrict ALLOWED_HOSTS, and configure CORS_ALLOWED_ORIGINS to your FE domain.
 
 ---

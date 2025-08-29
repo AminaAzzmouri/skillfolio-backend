@@ -7,6 +7,11 @@ Capture learning artifacts and progress for each user:
 - Certificate: proof of learning (metadata + optional uploaded file)
 - Project: practical work (optionally linked to a Certificate)
 - Goal: a lightweight target (e.g., “finish 5 projects by a date”)
+  NEW:
+    • optional checklist-style progress via total_steps/completed_steps
+      + computed steps_progress_percent (fallback)
+    • named checklist items via GoalStep (preferred)
+    • Goal now has a title
 
 Auth model
 - Uses Django's built-in User for simplicity. If profile fields are needed later,
@@ -17,6 +22,11 @@ Design notes
   and safely enforces ownership in the API layer.
 - Timestamps use auto_now_add where helpful to audit creation time.
 - Certificate uploads are stored under MEDIA_ROOT/certificates/.
+
+Migrations
+- Adding Goal.title and GoalStep requires new migrations.
+- Existing total_steps/completed_steps remain for compatibility; when Goal.steps
+  exist, progress is derived from them; otherwise we fall back to the integers.
 """
 
 from django.db import models
@@ -264,11 +274,9 @@ class Project(models.Model):
         if tools:
             bits.append(f"Key tools/skills: {', '.join(tools)}.")
 
-        # Outcome (prefer outcome_short; keep fallback for legacy/alt fields)
+        # Outcome
         if self.outcome_short:
             bits.append(f"Outcome: {self.outcome_short.strip()}")
-        elif hasattr(self, "impact") and self.impact:  # guard for optional/legacy field
-            bits.append(f"Impact: {self.impact.strip()}")
 
         # Reflection / next steps
         if self.skills_to_improve:
@@ -291,19 +299,32 @@ class Goal(models.Model):
     """
     Goal
     =============================================================================
-    A simple target like “complete 5 projects by YYYY-MM-DD”.
+    A simple target like “complete 5 projects by YYYY-MM-DD”, with optional
+    checklist steps.
 
     Fields
+    - title: short human-readable name for the goal
     - target_projects: positive integer target
     - deadline: date by which the target should be met
     - created_at: timestamp when the goal was created
 
+    NEW (Checklist-style progress)
+    - total_steps: total number of sub-steps (optional, default 0)
+    - completed_steps: number of sub-steps completed (optional, default 0)
+      The two are clamped in clean() so 0 <= completed_steps <= total_steps.
+
+    Computed Progress
+    - steps_progress_percent:
+        • If the goal has any GoalStep rows, compute from those (preferred).
+        • Otherwise, fall back to total_steps/completed_steps integers.
+
     Validation
-    - clean(): ensures a positive target and non-past deadline
+    - clean(): ensures a positive target and non-past deadline; clamps checklist fields
 
     Notes
-    - Progress percentage is computed in the serializer based on the user's
-      number of completed projects relative to target_projects.
+    - progress_percent (existing, serializer-computed): based on user's completed
+      projects vs target_projects.
+    - steps_progress_percent (model property): based on checklist ratio.
     """
 
     user = models.ForeignKey(
@@ -312,9 +333,14 @@ class Goal(models.Model):
         related_name="goals",
         help_text="Owner of this goal.",
     )
+    title = models.CharField(max_length=255, help_text="Short label for this goal.")
     target_projects = models.IntegerField(help_text="Number of projects to complete.")
     deadline = models.DateField(help_text="Target deadline.")
     created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
+
+    # Existing checklist integers (kept for compatibility / optional use)
+    total_steps = models.PositiveIntegerField(default=0, help_text="Total checklist steps (optional).")
+    completed_steps = models.PositiveIntegerField(default=0, help_text="Completed checklist steps (optional).")
 
     class Meta:
         ordering = ["deadline"]
@@ -326,6 +352,7 @@ class Goal(models.Model):
         Ensure data integrity:
         - target_projects must be a positive integer
         - deadline cannot be in the past
+        - clamp checklist fields: 0 <= completed_steps <= total_steps
         """
         from datetime import date as _date
         errors = {}
@@ -333,9 +360,71 @@ class Goal(models.Model):
             errors["target_projects"] = "target_projects must be a positive integer."
         if self.deadline and self.deadline < _date.today():
             errors["deadline"] = "deadline cannot be in the past."
+
+        # Clamp checklist fields
+        if self.total_steps is None or self.total_steps < 0:
+            self.total_steps = 0
+        if self.completed_steps is None or self.completed_steps < 0:
+            self.completed_steps = 0
+        if self.completed_steps > self.total_steps:
+            self.completed_steps = self.total_steps
+
         if errors:
-            from django.core.exceptions import ValidationError
             raise ValidationError(errors)
 
+    # --- Derived counters from named steps (preferred when steps exist) ---
+    @property
+    def steps_total(self) -> int:
+        return getattr(self, "steps", None).count() if hasattr(self, "steps") else 0
+
+    @property
+    def steps_completed(self) -> int:
+        rel = getattr(self, "steps", None)
+        return rel.filter(is_done=True).count() if rel is not None else 0
+
+    @property
+    def steps_progress_percent(self):
+        """
+        Percent complete based on checklist.
+        Priority: if there are named steps (GoalStep), compute from those;
+        otherwise, fall back to total_steps/completed_steps integers.
+        """
+        # Prefer named steps if present
+        total = self.steps_total
+        if total > 0:
+            done = self.steps_completed
+            return round(100 * (done / float(total)))
+
+        # Fallback to integers
+        if self.total_steps:
+            return round(100 * (self.completed_steps / float(self.total_steps)))
+        return 0
+
     def __str__(self):
-        return f"{self.user.username} - {self.target_projects} projects by {self.deadline}"
+        return f"{self.user.username} - {self.title or ''} ({self.target_projects} by {self.deadline})"
+
+
+class GoalStep(models.Model):
+    """
+    GoalStep
+    =============================================================================
+    A single named checklist item under a Goal.
+    - Title + checkbox (is_done)
+    - Optional 'order' for manual ordering
+    """
+    goal = models.ForeignKey(
+        Goal,
+        on_delete=models.CASCADE,
+        related_name="steps",
+        help_text="Parent goal for this step.",
+    )
+    title = models.CharField(max_length=255, help_text="Short description of the step.")
+    is_done = models.BooleanField(default=False, help_text="Mark when this step is completed.")
+    order = models.PositiveIntegerField(default=0, help_text="Optional order/index among steps.")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"[{'x' if self.is_done else ' '}] {self.title} (Goal #{self.goal_id})"

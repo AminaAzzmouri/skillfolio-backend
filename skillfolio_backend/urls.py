@@ -5,7 +5,7 @@ Purpose
 ===============================================================================
 - Wire Django admin, API routers, and auth endpoints.
 - Serve media files in development.
-- Expose DRF ViewSets for Certificates, Projects, and Goals.
+- Expose DRF ViewSets for Certificates, Projects, Goals, and NEW GoalSteps.
 - Provide small analytics endpoints for dashboard needs.
 - Provide JWT auth endpoints (login, refresh, register, logout).
 - Provide interactive API docs:
@@ -16,6 +16,10 @@ Notes
 - ViewSets are grouped via a DRF router to reduce boilerplate.
 - Auth views are centralized in users.auth_views.
 - Swagger UI helps manual testing and is a handy reference for the FE.
+
+NEW
+- Registered GoalStepViewSet at /api/goalsteps/ for named checklist items
+  under a goal (owner-scoped via parent goal).
 """
 
 from django.contrib import admin
@@ -33,7 +37,6 @@ from users.auth_views import (
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
-
 from django.shortcuts import redirect
 
 # -----------------------------------------------------------------------------
@@ -43,6 +46,7 @@ router = routers.DefaultRouter()
 router.register(r"certificates", views.CertificateViewSet)
 router.register(r"projects", views.ProjectViewSet)
 router.register(r"goals", views.GoalViewSet)
+router.register(r"goalsteps", views.GoalStepViewSet, basename="goalstep")  # NEW
 
 # -----------------------------------------------------------------------------
 # API Docs (Swagger/OpenAPI via drf-yasg)
@@ -59,7 +63,12 @@ schema_view = get_schema_view(
         description=(
             "Interactive API documentation for Skillfolio.\n\n"
             "Auth uses JWT (Bearer) tokens. Click 'Authorize' and paste: Bearer <ACCESS_TOKEN>.\n"
-            "List endpoints support filtering/search/ordering where noted."
+            "List endpoints support filtering/search/ordering where noted.\n\n"
+            "Key endpoints:\n"
+            "- /api/certificates/\n"
+            "- /api/projects/\n"
+            "- /api/goals/\n"
+            "- /api/goalsteps/  (NEW: named checklist items per goal)\n"
         ),
         contact=openapi.Contact(email="support@skillfolio.example"),
     ),
@@ -71,8 +80,9 @@ schema_view = get_schema_view(
 # URL Patterns
 # -----------------------------------------------------------------------------
 urlpatterns = [
-    path("", lambda r: redirect("api-docs-swagger"), name="root-redirect"), # add a tiny root view that redirects to Swagger.
-    
+    # tiny root view that redirects to Swagger
+    path("", lambda r: redirect("api-docs-swagger"), name="root-redirect"),
+
     path("admin/", admin.site.urls),
 
     # API (ViewSets)
