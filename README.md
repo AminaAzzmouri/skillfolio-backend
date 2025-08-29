@@ -16,7 +16,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 ### ✅ Implemented
 
-- User authentication (register, login, logout, JWT)
+- User authentication (register, login, logout, JWT with refresh-token blacklist)
+- Swagger docs with Bearer token "Authorize" flow (login → paste access → test endpoints)
 - Upload and manage certificates (PDF, with metadata: title, date)
 - CRUD for achievements (Certificates, Projects, Goals)
 - Link projects to certificates (guided fields + auto-generated description)
@@ -130,6 +131,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Add validation (e.g., no past deadline, file size/type check).
 - Add search/ordering params to README.
 - Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
+- Swagger docs configured with Bearer token support: use the "Authorize" button in /api/docs
+
+       → paste: `Bearer <ACCESS_TOKEN>` (after logging in via /api/auth/login/)
 
 # 🔑 Logout & Token Blacklist Notes
 
@@ -255,11 +259,12 @@ Base URL (local): http://127.0.0.1:8000
 
 **Auth**:
 
-| Endpoint              | Methods | Auth | Notes                                                                                       |
-| --------------------- | ------- | ---- | ------------------------------------------------------------------------------------------- |
-| `/api/auth/register/` | `POST`  | ❌   | Dev helper. Body: `{ "email", "password" }`. Creates a Django user using email as username. |
-| `/api/auth/login/`    | `POST`  | ❌   | JWT login (email or username). Returns `{ "access", "refresh" }`.                           |
-| `/api/auth/refresh/`  | `POST`  | ❌   | Exchange refresh for a new access token.                                                    |
+| Endpoint              | Methods | Auth | Notes                                                                                           |
+| --------------------- | ------- | ---- | ----------------------------------------------------------------------------------------------- |
+| `/api/auth/register/` | `POST`  | ❌   | Body: `{ "email", "password" }`. Dev helper for creating users (email used as username).        |
+| `/api/auth/login/`    | `POST`  | ❌   | Body: `{ "email","password" }` OR `{ "username","password" }`. Returns `{ "access","refresh" }`.|
+| `/api/auth/refresh/`  | `POST`  | ❌   | Body: `{ "refresh":"..." }`. Exchanges refresh → new access token.                              |
+| `/api/auth/logout/`   | `POST`  | ✅   | Body: `{ "refresh":"..." }`. Blacklists token. Requires Authorization: Bearer <ACCESS>.         |
 
 - Login body examples:  
    { "email": "you@example.com", "password": "pass1234" }
@@ -333,22 +338,18 @@ Base URL (local): http://127.0.0.1:8000
 
     - /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
 
-2.  What extra annotations could add:
-    Currently, Swagger auto-generates docs from ViewSets and serializers. If we add @swagger_auto_schema decorators, we can:
+ℹ️ Auth endpoints (register/login/logout) are now grouped under "Auth" in Swagger.
+    - Register: create a user
+    - Login: get access/refresh
+    - Authorize: paste `Bearer <ACCESS_TOKEN>` to unlock protected endpoints
+    - Logout: blacklist refresh token
 
-         * Group endpoints with tags → e.g., put login/logout/register under Auth.
+2.  What more we could add with @swagger_auto_schema:
 
-         * Add descriptions → clear human-friendly explanations for each operation.
+With @swagger_auto_schema decorators, we can also:
 
-         * Customize schemas → define exact input/output when auto-detection is imperfect.
-
-Example:
-@swagger_auto_schema(
-tags=["Auth"],
-operation_description="Login with email + password. Returns access and refresh JWT tokens."
-)
-def post(self, request, \*args, \*\*kwargs):
-...
+- Add descriptions → clear human-friendly explanations for each operation.
+- Customize schemas → define exact input/output when auto-detection is imperfect.
 
 3. Why this matters
 
@@ -356,10 +357,32 @@ def post(self, request, \*args, \*\*kwargs):
    - Contributors → clearer reference if the API is ever made public.
    - Future me → easy reminder of inputs/outputs after a break.
 
-✅ In short:
-/api/docs/ already works well.
-Adding annotations is optional, but makes the docs prettier, grouped, and self-explanatory.
+---
 
+## 🔑 Swagger Auth Workflow (Step-by-Step):
+
+When testing APIs in /api/docs/, follow this sequence:
+
+1. Register a user (optional if you already created one):
+    - Endpoint: POST /api/auth/register/
+    - Body: {"email":"you@example.com","password":"pass1234"}
+    - Returns the new user’s id/username/email.
+
+2. Login to get tokens
+    - Endpoint: POST /api/auth/login/
+    - Body: {"email":"you@example.com","password":"pass1234"}
+    - Response: { "refresh":"...", "access":"..." }
+
+3. Authorize in Swagger UI
+    - Click the green Authorize button (top-right in /api/docs).
+    - Paste: Bearer <ACCESS_TOKEN>
+    - ✅ Now all protected endpoints (certificates, projects, goals, analytics) will work directly from the Swagger interface.
+
+4. Logout when done
+    - Endpoint: POST /api/auth/logout/
+    - Body: {"refresh":"<your_refresh_token>"}
+    - This blacklists the refresh token → prevents reuse.
+    
 ---
 
 ## 🔍 Quick cURL Examples:
@@ -379,6 +402,14 @@ python manage.py runserver
 
 
 # 2) Login → get access/refresh
+
+- With email
+
+            curl -X POST http://127.0.0.1:8000/api/auth/login/ \
+            -H "Content-Type: application/json" \
+            -d '{"email":"you@example.com","password":"pass1234"}'
+
+- With username
 
             curl -X POST http://127.0.0.1:8000/api/auth/login/ \
             -H "Content-Type: application/json" \
