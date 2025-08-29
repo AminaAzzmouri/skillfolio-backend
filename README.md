@@ -202,7 +202,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Goals: title, target/deadline + checklist fields (total_steps, completed_steps), computed steps progress column; inline GoalStep rows; ordered by deadline
   → Admin is now great for quick QA/debugging of goal checklists
 
-# Basic API smoke tests (auth, certs, projects, analytics) ✅
+# Basic API smoke tests (auth, certs, projects, GoalSteps: create/list/patch/delete, goal totals auto-sync, analytics) ✅
 
 # Demo data seeding (optional): 
 - provides quick demo content for testing.
@@ -836,6 +836,10 @@ python manage.py runserver
     ** Full CRUD path: create → list → patch → get → delete → not found.
     ** Validations: negative target_projects and past deadline.
     ** Computed field: progress_percent updates as projects are completed and as target changes.
+
+  - GoalSteps
+    ** Create two steps (one done), verify goal totals update.
+    ** Toggle done, reorder, delete; verify totals and steps_progress_percent.
 
   - Analytics
     ** /api/analytics/summary/ returns the three user-scoped counts and you assert sensible minima.

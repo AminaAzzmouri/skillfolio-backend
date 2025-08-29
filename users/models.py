@@ -406,11 +406,12 @@ class Goal(models.Model):
 
 class GoalStep(models.Model):
     """
-    GoalStep
-    =============================================================================
-    A single named checklist item under a Goal.
-    - Title + checkbox (is_done)
-    - Optional 'order' for manual ordering
+    A named checklist item for a Goal.
+    - goal: FK to parent Goal (owner-scoped via the goal's user)
+    - title: short description of the step
+    - is_done: checkmark state
+    - order: optional ordering integer
+    - created_at: timestamp
     """
     goal = models.ForeignKey(
         Goal,
@@ -418,13 +419,34 @@ class GoalStep(models.Model):
         related_name="steps",
         help_text="Parent goal for this step.",
     )
-    title = models.CharField(max_length=255, help_text="Short description of the step.")
-    is_done = models.BooleanField(default=False, help_text="Mark when this step is completed.")
-    order = models.PositiveIntegerField(default=0, help_text="Optional order/index among steps.")
-    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
+    title = models.CharField(max_length=255, help_text="Step title/label.")
+    is_done = models.BooleanField(default=False, help_text="Checked/done?")
+    order = models.IntegerField(default=0, help_text="Optional manual ordering.")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["order", "id"]
 
     def __str__(self):
-        return f"[{'x' if self.is_done else ' '}] {self.title} (Goal #{self.goal_id})"
+        return f"[{'x' if self.is_done else ' '}] {self.title}"
+
+    # ------- NEW: keep parent goal counts in sync on every change -------
+    def _sync_parent_counts(self):
+        gid = self.goal_id
+        # Recompute totals from the DB to avoid drift.
+        total = GoalStep.objects.filter(goal_id=gid).count()
+        done = GoalStep.objects.filter(goal_id=gid, is_done=True).count()
+        # Use update() to avoid triggering Goal.clean() validations while syncing.
+        Goal.objects.filter(pk=gid).update(total_steps=total, completed_steps=done)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._sync_parent_counts()
+
+    def delete(self, *args, **kwargs):
+        gid = self.goal_id
+        super().delete(*args, **kwargs)
+        # After delete, recompute using gid (self.goal_id no longer available)
+        total = GoalStep.objects.filter(goal_id=gid).count()
+        done = GoalStep.objects.filter(goal_id=gid, is_done=True).count()
+        Goal.objects.filter(pk=gid).update(total_steps=total, completed_steps=done)
