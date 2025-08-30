@@ -31,6 +31,7 @@ NEW
 """
 
 from django.contrib.auth import get_user_model
+from django.db.models import Count 
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -91,7 +92,10 @@ class CertificateViewSet(OwnerScopedModelViewSet):
     - Search:      ?search=<substring> (title, issuer)
     - Ordering:    ?ordering=date_earned | -date_earned | title | -title
     """
-    queryset = Certificate.objects.all()
+    # Annotate with related projects count (distinct for safety)
+    queryset = Certificate.objects.all().annotate(
+        project_count=Count("projects", distinct=True)
+    )
     serializer_class = CertificateSerializer
     filterset_fields = ["issuer", "date_earned"]
     search_fields = ["title", "issuer"]
@@ -103,6 +107,7 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     """
     Projects API
     - Filtering:   ?certificate=<id>&status=<planned|in_progress|completed>
+                   Also accepts: ?certificateId=<id> (alias)
     - Search:      ?search=<substring> (title, description[, other fields if present])
     - Ordering:    ?ordering=date_created | -date_created | title | -title
     """
@@ -113,6 +118,14 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     search_fields = ["title", "description", "problem_solved", "tools_used"]
     ordering_fields = ["date_created", "title"]
     ordering = ["-date_created"]  # default newest first
+    
+    # NEW: support ?certificateId=<id> as an alias
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("certificate")
+        cert_id = self.request.query_params.get("certificateId")
+        if cert_id:
+            qs = qs.filter(certificate_id=cert_id)
+        return qs
 
 
 class GoalViewSet(OwnerScopedModelViewSet):

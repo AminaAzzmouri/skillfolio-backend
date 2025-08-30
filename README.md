@@ -288,6 +288,7 @@ Base URL (local): http://127.0.0.1:8000
 
 | Operation     | Method      | URL                       | Body                                                                    | Notes                                               |
 | ------------- | ----------- | ------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
+| List          | `GET`       | `/api/certificates/` | — | Returns only the authenticated user’s certificates. Includes `project_count` per certificate. |
 | List          | `GET`       | `/api/certificates/       | —                                                                       | Returns only the authenticated user’s certificates. |
 | Retrieve      | `GET`       | `/api/certificates/{id}/` |                                                                         |                                                     |
 | Create (JSON) | `POST`      | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`                                  | `file_upload` optional (multipart).                 |
@@ -297,7 +298,7 @@ Base URL (local): http://127.0.0.1:8000
 
 **Projects**: Base: /api/projects/
 
-- Filter: ?certificate=<id>&status=<planned|in_progress|completed>
+- Filter: ?certificate=<id>&status=<planned|in_progress|completed>. Also accepts: ?certificateId=<id> (alias for ?certificate=<id>)
 - Search: ?search=<substring> (matches title, description)
 - Ordering: ordering=date_created or ?ordering=-date_created (also title)
 - Pagination: ?page=1
@@ -481,6 +482,22 @@ python manage.py runserver
             curl http://127.0.0.1:8000/api/certificates/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>"
 
+# List with project_count
+
+            curl -H "Authorization: Bearer <TOKEN>" \
+            http://localhost:8000/api/certificates/?page=1 | jq '."results"[0] | {id, title, project_count}'
+
+- Example response field:
+
+            {
+                "id": 1,
+                "title": "Django Basics",
+                "issuer": "Coursera",
+                "date_earned": "2024-08-01",
+                "project_count": 2,
+                ...
+            }
+
 # Filter by issuer + date
 
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
@@ -562,6 +579,11 @@ python manage.py runserver
 
             curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
             "http://127.0.0.1:8000/api/projects/?certificate=12"
+
+# Filter by certificateId (alias)
+
+            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            "http://127.0.0.1:8000/api/projects/?certificateId=12"
 
 # Filter by status
 

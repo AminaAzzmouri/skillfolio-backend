@@ -63,6 +63,9 @@ class CertificateSerializer(serializers.ModelSerializer):
     - validate_date_earned(): prevents future dates (explicit API feedback).
     """
 
+    # NEW: count of related projects (annotated in the viewset)
+    project_count = serializers.IntegerField(read_only=True)
+
     def validate_date_earned(self, value):
         if value and value > date.today():
             raise serializers.ValidationError("date_earned cannot be in the future.")

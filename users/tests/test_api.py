@@ -9,17 +9,17 @@ User = get_user_model()
 class SkillfolioAPISmokeTests(APITestCase):
     """
     Minimal API smoke tests proving core flows work end-to-end:
-    - Auth: login returns access/refresh; refresh issues new access; logout blacklists refresh.
-    - Certificates: create (json + multipart), list owner-scoped, PATCH, DELETE (then 404).
-    - Projects: create (with/without certificate), list owner-scoped, PATCH (status/link/unlink), DELETE (then 404).
-    - Goals: CRUD + validations + computed progress_percent (+ title, checklist counts, steps_progress_percent).
-    - GoalSteps: create/list/patch/delete and goal counts sync.
-    - Analytics: summary returns user-scoped counts.
+    - Auth: login, refresh, logout (blacklist).
+    - Certificates: create (json + multipart), list owner-scoped, PATCH, DELETE, project_count annotation.
+    - Projects: create (with/without certificate), list owner-scoped, PATCH (status/link/unlink), DELETE, filter by certificateId alias.
+    - Goals: CRUD + validations + computed progress_percent, steps_progress_percent.
+    - GoalSteps: create/list/patch/delete and goal counts auto-sync.
+    - Analytics: summary counts (certificates, projects, goals).
     - Docs: /api/docs/ and /api/schema/ are reachable (200).
 
-    These tests intentionally focus on "does the happy path work?" rather than
-    every edge case. They’re meant to be fast and confidence-building.
+    Focus is on "happy path works" rather than exhaustive edge cases.
     """
+
 
     def setUp(self):
         # Create two users to verify owner scoping
@@ -260,6 +260,66 @@ class SkillfolioAPISmokeTests(APITestCase):
         missing = self.client.get(f"/api/projects/{proj_id}/")
         self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
 
+    # -----------------------
+    # Certificates including projects
+    # -----------------------
+    def test_certificates_list_includes_project_count(self):
+        """
+        Certificates should include project_count, reflecting related projects.
+        """
+        # Create certificate
+        cert = self.client.post(
+            "/api/certificates/",
+            {"title": "With Projects", "issuer": "TestOrg", "date_earned": "2024-08-01"},
+            format="json",
+        ).data
+
+        # Create two projects linked to it
+        for i in range(2):
+            self.client.post(
+                "/api/projects/",
+                {"title": f"Proj{i}", "certificate": cert["id"], "status": "completed", "description": "x"},
+                format="json",
+            )
+
+        # Fetch certificate list → project_count must be 2
+        res = self.client.get("/api/certificates/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        item = next((c for c in res.data.get("results", []) if c["id"] == cert["id"]), None)
+        self.assertIsNotNone(item, "Certificate not found in list")
+        self.assertIn("project_count", item)
+        self.assertEqual(item["project_count"], 2)
+
+    def test_projects_filter_by_certificateId_alias(self):
+        """
+        Projects can be filtered using ?certificateId=<id> alias.
+        """
+        # Create cert + 1 linked project
+        cert = self.client.post(
+            "/api/certificates/",
+            {"title": "Alias Cert", "issuer": "TestOrg", "date_earned": "2024-07-01"},
+            format="json",
+        ).data
+        linked = self.client.post(
+            "/api/projects/",
+            {"title": "Alias Project", "certificate": cert["id"], "status": "planned", "description": "demo"},
+            format="json",
+        ).data
+
+        # Create an unrelated project
+        self.client.post(
+            "/api/projects/",
+            {"title": "Unrelated", "status": "completed", "description": "other"},
+            format="json",
+        )
+
+        # Filter with ?certificateId
+        res = self.client.get(f"/api/projects/?certificateId={cert['id']}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        items = res.data.get("results", res.data)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], linked["id"])
+    
     # -----------------------
     # Goals
     # -----------------------
