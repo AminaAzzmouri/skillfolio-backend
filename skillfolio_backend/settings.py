@@ -187,6 +187,11 @@ REST_FRAMEWORK = {
     # Optionally rename query params for FE sugar:
     # "SEARCH_PARAM": "search",
     # "ORDERING_PARAM": "ordering",
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
+    ],
 }
 
 # JWT lifetimes (dev-friendly defaults)
