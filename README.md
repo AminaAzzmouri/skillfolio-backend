@@ -21,6 +21,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Upload and manage certificates (PDF, with metadata: title, date)
 - CRUD for achievements (Certificates, Projects, Goals)
 - Link projects to certificates (guided fields + auto-generated description)
+- Certificates list includes a project_count annotation (projects linked per certificate).
+- Certificates endpoint accepts ?id=<pk> filter for direct linking from the Projects page.
+- Projects endpoint also accepts ?certificateId=<id> (alias for ?certificate=<id>).
 - Goal checklists: named steps (create/check/reorder) + per-goal checklist progress; admin inline editor; new /api/goalsteps/ endpoints
 - Set and track learning goals (with deadlines, validations, and progress tracking)
 - Filtering / search / ordering across list endpoints (see Quick Reference)
@@ -182,9 +185,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Filters / Search / Ordering
 
-- Certificates: filter by issuer/date, search title/issuer, order by date/title
-- Projects: filter by certificate/status, search title/description, order by date/title
-- Goals: filter by deadline, order by created_at
+- Certificates: filter by id/issuer/date, search title/issuer, order by date/title; returns project_count per row
+- Projects: filter by certificate (or certificateId alias)/status, search title/description, order by date/title
+- Goals: filter by deadline, order by created_at (also supports checklist fields in ordering)
 
 # Analytics
 
@@ -286,15 +289,14 @@ Base URL (local): http://127.0.0.1:8000
 
 - Default ordering: newest first (-date_earned)
 
-| Operation     | Method      | URL                       | Body                                                                    | Notes                                               |
-| ------------- | ----------- | ------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
-| List          | `GET`       | `/api/certificates/` | — | Returns only the authenticated user’s certificates. Includes `project_count` per certificate. |
-| List          | `GET`       | `/api/certificates/       | —                                                                       | Returns only the authenticated user’s certificates. |
-| Retrieve      | `GET`       | `/api/certificates/{id}/` |                                                                         |                                                     |
-| Create (JSON) | `POST`      | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`                                  | `file_upload` optional (multipart).                 |
-| Create (file) | `POST`      | `/api/certificates/`      | multipart fields: `title`, `issuer`, `date_earned`, `file_upload=@path` | Requires `Content-Type: multipart/form-data`.       |
-| Update        | `PUT/PATCH` | `/api/certificates/{id}/` | JSON or multipart                                                       |                                                     |
-| Delete        | `DELETE`    | `/api/certificates/{id}/` | —                                                                       |                                                     |
+| Operation     | Method      | URL                       | Body                                                                    | Notes                                                                                |
+| ------------- | ----------- | ------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| List          | GET         | `/api/certificates/`      | —                                                                       | Returns only the authenticated user’s certificates. Supports `?id=<pk>`. Includes `project_count`. |
+| Retrieve      | GET         | `/api/certificates/{id}/` | —                                                                       |                                                                                      |
+| Create (JSON) | POST        | `/api/certificates/`      | `{ "title", "issuer", "date_earned" }`                                  | `file_upload` optional (multipart).                                                  |
+| Create (file) | POST        | `/api/certificates/`      | multipart: `title`, `issuer`, `date_earned`, `file_upload=@path`        | Requires `Content-Type: multipart/form-data`.                                        |
+| Update        | PUT/PATCH   | `/api/certificates/{id}/` | JSON or multipart                                                       |                                                                                      |
+| Delete        | DELETE      | `/api/certificates/{id}/` | —                                                                       |                                                                                      |
 
 **Projects**: Base: /api/projects/
 
@@ -481,6 +483,11 @@ python manage.py runserver
 
             curl http://127.0.0.1:8000/api/certificates/ \
             -H "Authorization: Bearer <ACCESS_TOKEN>"
+
+# Filter by id (used when clicking "View certificate" from Projects)
+
+            curl -H "Authorization: Bearer <ACCESS_TOKEN>" \
+            "http://127.0.0.1:8000/api/certificates/?id=5"
 
 # List with project_count
 
