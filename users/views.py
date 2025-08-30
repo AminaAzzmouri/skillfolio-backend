@@ -25,9 +25,20 @@ NEW
   * PATCH/PUT accepts total_steps and completed_steps (standard model fields).
   * steps_progress_percent is exposed as a computed read-only field alongside
     progress_percent.
+    
 - GoalStepViewSet:
   * CRUD for named steps under a Goal (owner-scoped through parent goal).
   * filterset/search/order helpers for admin-like convenience.
+  
+- CertificateViewSet:
+  * Annotates each row with project_count via Count("projects", distinct=True).
+    WHY: The Certificates page shows number of associated projects per card.
+  * Adds filter by id (?id=<pk>).
+    WHY: The Projects page “View certificate” link navigates to /certificates?id=<pk>.
+
+- ProjectViewSet:
+  * Accepts ?certificateId=<id> alias for filtering.
+    WHY: Keeps FE query flexible and simple.
 """
 
 from django.contrib.auth import get_user_model
@@ -97,7 +108,7 @@ class CertificateViewSet(OwnerScopedModelViewSet):
         project_count=Count("projects", distinct=True)
     )
     serializer_class = CertificateSerializer
-    filterset_fields = ["issuer", "date_earned"]
+    filterset_fields = ["id", "issuer", "date_earned"]
     search_fields = ["title", "issuer"]
     ordering_fields = ["date_earned", "title"]
     ordering = ["-date_earned"]  # default newest first

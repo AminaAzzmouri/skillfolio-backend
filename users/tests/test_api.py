@@ -10,14 +10,16 @@ class SkillfolioAPISmokeTests(APITestCase):
     """
     Minimal API smoke tests proving core flows work end-to-end:
     - Auth: login, refresh, logout (blacklist).
-    - Certificates: create (json + multipart), list owner-scoped, PATCH, DELETE, project_count annotation.
+    - Certificates: create (json + multipart), list owner-scoped, PATCH, DELETE, project_count annotation, filter by id.
     - Projects: create (with/without certificate), list owner-scoped, PATCH (status/link/unlink), DELETE, filter by certificateId alias.
     - Goals: CRUD + validations + computed progress_percent, steps_progress_percent.
     - GoalSteps: create/list/patch/delete and goal counts auto-sync.
-    - Analytics: summary counts (certificates, projects, goals).
+    - Analytics: summary counts.
     - Docs: /api/docs/ and /api/schema/ are reachable (200).
+    - /api/certificates/?id=<pk> returns exactly that cert, and each cert has project_count (annotated).
+    - Certificates support ?id=<pk> and expose project_count (annotated).
+    - Projects accept ?certificateId=<id> as a filter alias.
 
-    Focus is on "happy path works" rather than exhaustive edge cases.
     """
 
 
@@ -114,6 +116,76 @@ class SkillfolioAPISmokeTests(APITestCase):
         items = res.data if isinstance(res.data, list) else res.data.get("results", [])
         # Weak check: all items belong to me (issuer check is brittle, but OK for smoke)
         self.assertTrue(all("issuer" in it for it in items))
+        
+         # Create a certificate
+        cert_res = self.client.post(
+            "/api/certificates/",
+            {"title": "Count Me", "issuer": "ACME", "date_earned": "2024-08-01"},
+            format="json",
+        )
+        self.assertEqual(cert_res.status_code, status.HTTP_201_CREATED, cert_res.data)
+        cert_id = cert_res.data["id"]
+
+        # Link two projects to that certificate
+        for i in range(2):
+            pr = self.client.post(
+                "/api/projects/",
+                {"title": f"P{i}", "status": "planned", "certificate": cert_id, "description": "d"},
+                format="json",
+            )
+            self.assertEqual(pr.status_code, status.HTTP_201_CREATED, pr.data)
+
+        # Filter by id
+        res = self.client.get(f"/api/certificates/?id={cert_id}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        items = res.data if isinstance(res.data, list) else res.data.get("results", [])
+        self.assertEqual(len(items), 1, items)
+        self.assertIn("project_count", items[0])
+        self.assertEqual(items[0]["project_count"], 2)
+
+    def test_projects_filter_by_certificateId_alias(self):
+        """
+        NEW: /api/projects/?certificateId=<id> works as an alias of ?certificate=<id>.
+        """
+        cert = self.client.post(
+            "/api/certificates/",
+            {"title": "Alias Cert", "issuer": "X", "date_earned": "2024-06-01"},
+            format="json",
+        ).data
+        cid = cert["id"]
+
+        # Two linked projects + one unlinked
+        p1 = self.client.post(
+            "/api/projects/",
+            {"title": "A", "status": "planned", "certificate": cid, "description": "d"},
+            format="json",
+        )
+        p2 = self.client.post(
+            "/api/projects/",
+            {"title": "B", "status": "planned", "certificate": cid, "description": "d"},
+            format="json",
+        )
+        p3 = self.client.post(
+            "/api/projects/",
+            {"title": "C", "status": "planned", "certificate": None, "description": "d"},
+            format="json",
+        )
+        self.assertEqual(p1.status_code, status.HTTP_201_CREATED, p1.data)
+        self.assertEqual(p2.status_code, status.HTTP_201_CREATED, p2.data)
+        self.assertEqual(p3.status_code, status.HTTP_201_CREATED, p3.data)
+
+        # Alias param
+        res_alias = self.client.get(f"/api/projects/?certificateId={cid}")
+        self.assertEqual(res_alias.status_code, status.HTTP_200_OK, res_alias.data)
+        items_alias = res_alias.data if isinstance(res_alias.data, list) else res_alias.data.get("results", [])
+        self.assertGreaterEqual(len(items_alias), 2)
+        self.assertTrue(all(it["certificate"] == cid for it in items_alias))
+
+        # Baseline param
+        res_base = self.client.get(f"/api/projects/?certificate={cid}")
+        self.assertEqual(res_base.status_code, status.HTTP_200_OK, res_base.data)
+        items_base = res_base.data if isinstance(res_base.data, list) else res_base.data.get("results", [])
+        self.assertEqual({it["id"] for it in items_alias}, {it["id"] for it in items_base})
 
     def test_certificates_create_multipart_with_file(self):
         # A tiny in-memory "pdf" for upload (content type isn't strictly enforced here)
@@ -159,6 +231,26 @@ class SkillfolioAPISmokeTests(APITestCase):
         # GET should now 404
         missing = self.client.get(f"/api/certificates/{cert_id}/")
         self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+        
+    def test_certificates_filter_by_id(self):
+        # Create two certs
+        a = self.client.post(
+            "/api/certificates/",
+            {"title": "A", "issuer": "X", "date_earned": "2024-06-01"},
+            format="json",
+        ).data
+        _b = self.client.post(
+            "/api/certificates/",
+            {"title": "B", "issuer": "Y", "date_earned": "2024-07-01"},
+            format="json",
+        ).data
+
+        # Filter by id (should return only A)
+        res = self.client.get(f"/api/certificates/?id={a['id']}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        items = res.data if isinstance(res.data, list) else res.data.get("results", [])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], a["id"])
 
     # -----------------------
     # Projects
