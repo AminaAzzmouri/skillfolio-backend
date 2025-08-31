@@ -104,5 +104,10 @@ urlpatterns = [
 ]
 
 # Dev-only media serving (uploads in /media/)
-if settings.DEBUG:
+# if settings.DEBUG:
+#     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+if settings.DEBUG or os.environ.get("ENABLE_MEDIA_SERVE") == "1":
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# ==> Serve /media/ in prod for now so “View file” links work: the media block is now always serve when an env flag is set
