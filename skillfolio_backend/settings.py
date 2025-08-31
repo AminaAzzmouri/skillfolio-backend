@@ -120,6 +120,10 @@ CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
 # Lets you safely switch between permissive dev mode and restricted prod mode.
 
 
+# Allow all preview subdomains of vercel project
+CORS_ALLOWED_ORIGINS_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
+
+
 
 INSTALLED_APPS = [
     # Django core
