@@ -286,3 +286,24 @@ if USE_S3:
         MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
+
+
+# Preview errors with file upload on Renders.logs
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "django.request": {  # 500s, 404s with exceptions
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": True,
+        },
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
