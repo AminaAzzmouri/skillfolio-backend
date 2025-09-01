@@ -1,6 +1,7 @@
 """
 models.py — Core domain models for Skillfolio
 
+
 Purpose
 ===============================================================================
 Capture learning artifacts and progress for each user:
@@ -13,9 +14,11 @@ Capture learning artifacts and progress for each user:
     • named checklist items via GoalStep (preferred)
     • Goal now has a title
 
+
 Auth model
 - Uses Django's built-in User for simplicity. If profile fields are needed later,
   add a Profile model (OneToOne to User) or switch to a custom user model.
+
 
 Design notes
 - All models are user-scoped (FK to User) which makes per-user filtering simple
@@ -23,10 +26,24 @@ Design notes
 - Timestamps use auto_now_add where helpful to audit creation time.
 - Certificate uploads are stored under MEDIA_ROOT/certificates/.
 
+
 Migrations
 - Adding Goal.title and GoalStep requires new migrations.
 - Existing total_steps/completed_steps remain for compatibility; when Goal.steps
   exist, progress is derived from them; otherwise we fall back to the integers.
+
+
+NEW in this revision
+===============================================================================
+- Project duration is now **calendar-based**:
+    • start_date + end_date are the single source of truth for duration
+    • duration_text is auto-filled from dates (humanized) and kept for UI display
+- Removed structured duration fields (duration_amount, duration_unit).
+- Field labels:
+    • skills_used → “Skills practiced” (verbose_name)
+    • challenges_short → “Challenges encountered” (verbose_name)
+- Description auto-generation still only runs when description is blank; it now
+  prefers date-based duration (falling back to any existing duration_text).
 """
 
 from django.db import models
@@ -69,7 +86,6 @@ class Certificate(models.Model):
     Tips
     - Consider adding fields like external ID or skill tags if needed later.
     """
-
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -116,15 +132,15 @@ class Project(models.Model):
     - title: Name of the project
     - status: planned / in_progress / completed
     - work_type: individual or team
-    - duration_text: short, human-readable duration (“2 weeks”, “weekend”)
+    - start_date + end_date: calendar range (preferred; duration is derived)
+    - duration_text: human-readable duration (auto-derived; shown in Admin)
     - primary_goal: practice_skill / deliver_feature / build_demo / solve_problem
     - certificate: optional FK to a related Certificate
     - description: narrative (auto-generated if left blank)
     - date_created: timestamp (auto)
 
     Guided fields (used for auto-description; all optional)
-    - tools_used, skills_used, problem_solved, challenges_short,
-      outcome_short, skills_to_improve
+    - tools_used, skills_used, problem_solved, challenges_short, skills_to_improve
     """
 
     STATUS_PLANNED = "planned"
@@ -165,11 +181,17 @@ class Project(models.Model):
         help_text="Was this an individual or team project?"
     )
 
+    # Preferred: date range
+    start_date = models.DateField(null=True, blank=True, verbose_name="Start date", help_text="Optional start date.")
+    end_date   = models.DateField(null=True, blank=True, verbose_name="End date",   help_text="Optional end date.")
+
+    # Human-friendly duration string (derived from dates; displayed in Admin/UI)
     duration_text = models.CharField(
         max_length=100,
         blank=True,
         null=True,
-        help_text="Rough duration (e.g., '2 weeks', 'a weekend')."
+        verbose_name="Duration",
+        help_text="Auto-filled from start/end dates.",
     )
 
     GOAL_PRACTICE = "practice_skill"
@@ -203,13 +225,22 @@ class Project(models.Model):
         blank=True,
         help_text="(Optional) Which tools/technologies did you use?"
     )
-    skills_used = models.TextField(blank=True, null=True, help_text="Skills/tools used (CSV or short text).")
+    skills_used = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Skills practiced",
+        help_text="Skills practiced (CSV or short text)."
+    )
     problem_solved = models.TextField(
         blank=True,
         help_text="(Optional) What problem did this project solve?"
     )
-    challenges_short = models.TextField(blank=True, null=True, help_text="Key challenges faced (short).")
-    outcome_short = models.TextField(blank=True, null=True, help_text="(Optional) What was the outcome or impact?")
+    challenges_short = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Challenges encountered",
+        help_text="Key challenges faced (short)."
+    )
     skills_to_improve = models.TextField(blank=True, null=True, help_text="What to practice more next time.")
     description = models.TextField(help_text="What you built, how, tools used, and impact.", blank=True)
 
@@ -223,13 +254,68 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
-    # -----------------------------------------------------------------------------
-    # Auto-generate description from guided answers when empty
-    # -----------------------------------------------------------------------------
+    # ----------------------------- Duration helpers -----------------------------
+    @staticmethod
+    def _plural(n: int, word: str) -> str:
+        return f"{n} {word if n == 1 else word + 's'}"
+
+    def _duration_from_dates(self) -> str | None:
+        """
+        Humanize start_date → end_date:
+        - < 14 days: 'N days'
+        - < 60 days: '~N weeks'
+        - < 365 days: '~N months'
+        - otherwise: '~N years'
+        Returns None if dates are incomplete or invalid.
+        """
+        if not self.start_date or not self.end_date:
+            return None
+        delta_days = (self.end_date - self.start_date).days
+        if delta_days < 0:
+            return None
+        d = max(1, delta_days)  # treat same-day as 1 day
+        if d < 14:
+            return self._plural(d, "day")
+        if d < 60:
+            weeks = round(d / 7.0) or 1
+            return self._plural(weeks, "week")
+        if d < 365:
+            months = round(d / 30.0) or 1
+            return self._plural(months, "month")
+        years = round(d / 365.0) or 1
+        return self._plural(years, "year")
+
+    @property
+    def duration_human(self) -> str:
+        """
+        Human-friendly duration, preferring dates; falls back to stored text.
+        """
+        by_dates = self._duration_from_dates()
+        if by_dates:
+            return by_dates
+        return self.duration_text or ""
+
+    def _sync_duration_text(self):
+        """
+        Keep duration_text derived from dates.
+        """
+        by_dates = self._duration_from_dates()
+        if by_dates:
+            self.duration_text = by_dates
+        # else leave as-is (may be blank)
+
+    # -------------------- Validation & description generation -------------------
+    def clean(self):
+        """Validate date range if both provided."""
+        errors = {}
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            errors["end_date"] = "End date cannot be before start date."
+        if errors:
+            raise ValidationError(errors)
+
     def _generated_description(self) -> str:
         """
         Build a concise description using any guided fields that are present.
-        This makes the record readable even when the author leaves description blank.
         """
         bits = []
 
@@ -241,7 +327,7 @@ class Project(models.Model):
         elif self.work_type == self.WORK_TEAM:
             role = "team project"
 
-        dur = self.duration_text.strip() if self.duration_text else None
+        dur = self.duration_human.strip() if self.duration_human else None
         if role and dur:
             bits.append(f"{opening} was a {role} completed in {dur}.")
         elif role:
@@ -263,7 +349,11 @@ class Project(models.Model):
 
         # Problem solved
         if self.problem_solved:
-            bits.append(f"It addressed: {self.problem_solved.strip()}")
+            bits.append(f"It addressed: {self.problem_solved.strip()}.")
+            
+        # Challenges encountered
+        if self.challenges_short:
+            bits.append(f"Challenges encountered: {self.challenges_short.strip()}.")
 
         # Tools / skills
         tools = []
@@ -274,10 +364,6 @@ class Project(models.Model):
         if tools:
             bits.append(f"Key tools/skills: {', '.join(tools)}.")
 
-        # Outcome
-        if self.outcome_short:
-            bits.append(f"Outcome: {self.outcome_short.strip()}")
-
         # Reflection / next steps
         if self.skills_to_improve:
             bits.append(f"Next, I plan to improve: {self.skills_to_improve.strip()}.")
@@ -287,9 +373,11 @@ class Project(models.Model):
     def save(self, *args, **kwargs):
         """
         On save:
+        - Keep duration_text in sync (prefer dates).
         - If `description` is blank/whitespace, compose one from the guided fields.
         - If `description` already has content, we respect the author's text.
         """
+        self._sync_duration_text()
         if not self.description or not self.description.strip():
             self.description = self._generated_description()
         super().save(*args, **kwargs)
@@ -326,7 +414,6 @@ class Goal(models.Model):
       projects vs target_projects.
     - steps_progress_percent (model property): based on checklist ratio.
     """
-
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -389,13 +476,10 @@ class Goal(models.Model):
         Priority: if there are named steps (GoalStep), compute from those;
         otherwise, fall back to total_steps/completed_steps integers.
         """
-        # Prefer named steps if present
         total = self.steps_total
         if total > 0:
             done = self.steps_completed
             return round(100 * (done / float(total)))
-
-        # Fallback to integers
         if self.total_steps:
             return round(100 * (self.completed_steps / float(self.total_steps)))
         return 0
@@ -430,7 +514,7 @@ class GoalStep(models.Model):
     def __str__(self):
         return f"[{'x' if self.is_done else ' '}] {self.title}"
 
-    # ------- NEW: keep parent goal counts in sync on every change -------
+    # ------- keep parent goal counts in sync on every change -------
     def _sync_parent_counts(self):
         gid = self.goal_id
         # Recompute totals from the DB to avoid drift.

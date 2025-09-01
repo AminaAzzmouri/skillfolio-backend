@@ -1,6 +1,7 @@
 """
 users/admin.py — Django Admin configuration for Skillfolio
 
+
 Purpose
 ===============================================================================
 Make the Django admin genuinely useful for day-to-day QA and debugging.
@@ -8,11 +9,13 @@ We expose the core models (Certificate, Project, Goal, and NEW GoalStep) with
 sensible list columns, filters, search, and ordering so you can quickly find
 and inspect data.
 
+
 How to read this file (plain English):
 - list_display: columns shown in the admin list page (the big table).
 - list_filter: right-hand sidebar filters to narrow results without typing.
 - search_fields: text search across chosen fields (substring match).
 - ordering: default sort order in the list page.
+
 
 Highlights
 - Certificate: search by title/issuer, filter by issuer/date, newest first.
@@ -21,6 +24,7 @@ Highlights
         (total_steps, completed_steps) and a computed steps_progress% column.
         Inline editing of named steps (GoalStep) is provided.
 - GoalStep: lightweight inline rows (title, is_done, order), tied to a Goal.
+
 
 NEW (admin behavior improvements)
 ===============================================================================
@@ -38,6 +42,18 @@ NEW (admin behavior improvements)
   If left blank (or when created programmatically), we default the owner to the
   current admin user for safety. (See CertificateAdmin.get_readonly_fields and
   CertificateAdmin.save_model)
+
+- NEW (calendar duration in Admin):
+  * Project detail and inline show Start date / End date pickers.
+  * Duration is a read-only field (duration_text) auto-filled from dates.
+
+- NEW (description refresh in Admin):
+  * Project detail page: if “driver” fields change and the admin user did NOT edit
+    the description field, we auto-regenerate description to stay in sync with the
+    updated guided fields (see ProjectAdmin.save_model()).
+  * Inline Projects under a Certificate: if description is blank, we auto-generate
+    right before saving (see CertificateAdmin.save_formset()).
+
 
 Notes
 - Admin is for trusted staff only; normal clients use the REST API.
@@ -60,9 +76,8 @@ class ProjectInline(admin.TabularInline):
     Inline Projects under a Certificate.
 
     Why fields are arranged this way:
-    - 'date_created' is included in 'fields' AND in 'readonly_fields' so it
-      shows up in the inline table but cannot be edited. This avoids the
-      common "non-editable field in form" error while still being visible.
+    - 'date_created' and 'duration_text' are included in 'fields' AND in
+      'readonly_fields' so they show up but cannot be edited.
     """
     model = Project
     fk_name = "certificate"  # name of the FK field on Project
@@ -70,9 +85,9 @@ class ProjectInline(admin.TabularInline):
     show_change_link = True
 
     # Editable inputs in the inline row:
-    fields = ("title", "status", "date_created")
+    fields = ("title", "status", "work_type", "start_date", "end_date", "duration_text", "date_created")
     # Non-editable display columns:
-    readonly_fields = ("date_created",)
+    readonly_fields = ("date_created", "duration_text")
 
 
 @admin.register(Certificate)
@@ -116,12 +131,10 @@ class CertificateAdmin(admin.ModelAdmin):
         # Annotate so we can display & sort by project count efficiently
         qs = super().get_queryset(request)
         return qs.annotate(_project_count=Count("projects", distinct=True))
-        # If your reverse name were the default, you would use Count("project_set")
 
     def project_count(self, obj):
         # Use the annotation if present, else fall back to a count()
         return getattr(obj, "_project_count", obj.projects.count())
-        # If reverse name was default: obj.project_set.count()
     project_count.short_description = "Projects"
     project_count.admin_order_field = "_project_count"
 
@@ -144,17 +157,25 @@ class CertificateAdmin(admin.ModelAdmin):
         Critical fix: make inline Project rows inherit the certificate owner
         and link back to the certificate. Prevents NOT NULL errors for
         Project.user and guarantees consistent ownership.
+
+        NEW:
+        - If an inline Project's description is blank, auto-generate it so the
+          admin experience matches the API behavior.
+        - Duration is recomputed (read-only) from dates.
         """
         instances = formset.save(commit=False)
         parent_cert = form.instance  # the Certificate being saved
 
         for obj in instances:
             if isinstance(obj, Project):
-                # Link to this certificate (belt & suspenders; inlines do this normally)
                 obj.certificate = parent_cert
-                # Ensure ownership mirrors the certificate owner
                 if obj.user_id is None:
                     obj.user = parent_cert.user
+                # auto description if blank
+                if not obj.description or not str(obj.description).strip():
+                    obj.description = obj._generated_description()
+                # ensure duration_text is in sync for display
+                obj._sync_duration_text()
             obj.save()
 
         # Handle deletions + m2m
@@ -171,7 +192,7 @@ class ProjectAdmin(admin.ModelAdmin):
     """
     Project list view:
       - Columns surface ownership and linkage (user/certificate), delivery state
-        (status), and quick context (work_type, duration_text).
+        (status), and quick context (work_type, Duration).
       - Filters make it easy to audit completed projects, team work, or specific
         certificate relationships.
       - Search spans both the core title/description and the guided text fields.
@@ -180,35 +201,81 @@ class ProjectAdmin(admin.ModelAdmin):
     - 'user' is read-only in the form; if you add a Project directly here,
       we default it to the current admin in save_model() when missing.
       (Inline creation under a Certificate uses the Certificate's owner instead.)
+
+    NEW (description refresh in Admin):
+    - If the admin edits any “driver” fields but does NOT touch the description
+      field, we refresh description automatically (mirrors the serializer behavior).
+
+    NEW (calendar fields):
+    - Show Start date / End date; Duration (read-only) auto-fills.
     """
     list_display = (
         "title", "user", "certificate", "status", "work_type", "duration_text"
     )
     autocomplete_fields = ("certificate",)
-    readonly_fields = ("user", "date_created")
+    readonly_fields = ("user", "date_created", "duration_text")
     list_filter = ("status", "work_type", "certificate", "date_created")
     search_fields = (
         "title",
         "description",
         "problem_solved",
         "tools_used",
-        "challenges_short",
         "skills_used",
-        "outcome_short",
+        "challenges_short",
+        # outcome_short removed from model
         "skills_to_improve",
         "user__username",
         "user__email",
     )
     ordering = ("-date_created",)  # newest projects first
 
+    # Optional: form layout
+    fields = (
+        "user",
+        "title",
+        ("status", "work_type"),
+        ("start_date", "end_date"),
+        "duration_text",  # read-only, computed from dates
+        "primary_goal",
+        "certificate",
+        "problem_solved",
+        "tools_used",
+        "skills_used",
+        "challenges_short",
+        "skills_to_improve",
+        "description",
+        "date_created",
+    )
+
     def save_model(self, request, obj, form, change):
         """
-        Safety net for direct Project creation in admin:
-        if no owner was set (field is read-only), assign current admin.
-        (Inline under Certificate uses the certificate owner instead.)
+        Safety nets for Admin:
+        - On add, if no owner set, assign current admin.
+        - If driver fields changed and description wasn't edited, regenerate
+          the description so it stays in sync with the guided answers.
+        - Always keep duration_text in sync (read-only display).
         """
         if not change and obj.user_id is None:
             obj.user = request.user
+
+        driver_fields = {
+            "title", "work_type",
+            "start_date", "end_date",   # calendar drivers
+            "duration_text",            # will be re-synced anyway
+            "primary_goal",
+            "problem_solved", "tools_used", "skills_used",
+            "challenges_short",
+            "skills_to_improve",
+        }
+        changed_driver = any(f in getattr(form, "changed_data", ()) for f in driver_fields)
+        description_changed = "description" in getattr(form, "changed_data", ())
+
+        # sync duration_text for display
+        obj._sync_duration_text()
+
+        if changed_driver and not description_changed:
+            obj.description = obj._generated_description()
+
         super().save_model(request, obj, form, change)
 
 
@@ -278,5 +345,6 @@ class GoalAdmin(admin.ModelAdmin):
         "created_at",
     )
     readonly_fields = ("created_at",)
+
 
 
