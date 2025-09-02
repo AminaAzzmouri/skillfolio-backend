@@ -29,11 +29,12 @@ from users import views  # resource ViewSets + analytics
 from django.conf import settings
 from django.conf.urls.static import static
 
-import os
+# import os
 
 # Auth endpoints (centralized)
 from users.auth_views import (
     EmailTokenObtainPairView,
+    TokenRefreshTaggedView,
     register,
     logout as jwt_logout,
 )
@@ -92,7 +93,8 @@ urlpatterns = [
 
     # Auth (JWT)
     path("api/auth/login/",   EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/auth/refresh/", TokenRefreshView.as_view(),         name="token_refresh"),
+    path("api/auth/refresh/", TokenRefreshTaggedView.as_view(),   name="auth_refresh_create"),
+
     path("api/auth/register/", register,                          name="register"),
     path("api/auth/logout/",  jwt_logout,                         name="logout"),
 
@@ -106,10 +108,10 @@ urlpatterns = [
 ]
 
 # Dev-only media serving (uploads in /media/)
-# if settings.DEBUG:
-#     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.DEBUG:
+     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 
-if settings.DEBUG or os.environ.get("ENABLE_MEDIA_SERVE") == "1":
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# if settings.DEBUG or os.environ.get("ENABLE_MEDIA_SERVE") == "1":
+    # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 # ==> Serve /media/ in prod for now so “View file” links work: the media block is now always serve when an env flag is set
