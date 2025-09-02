@@ -96,11 +96,17 @@ NEW (admin behavior improvements)
 - NEW (Project form — Certificate FK limited to linking only)
   * On Project **add/edit** pages, the Certificate field is **link-only**:
     no “add”, “edit/change”, “delete”, or “view” icons are rendered next to it.
-    This keeps all certificate management in the Certificates admin, while still
+    This keeps certificate management in the Certificates admin, while still
     allowing you to **select** a certificate (and clear it with the per-field Reset
-    link provided by the JS). Implementation: we patch the admin’s related-field
-    widget to disable `can_add_related`, `can_change_related`, `can_delete_related`,
-    and `can_view_related` for that field.
+    link provided by the JS). Implementation: in ProjectAdmin.get_form() we toggle
+    the related-field wrapper flags: can_add_related=False, can_change_related=False,
+    can_delete_related=False, can_view_related=False.
+
+Notes
+===============================================================================
+- The per-field “Reset” links and “Reset all” button are purely client-side and
+  live in users/static/users/admin/project_end_date_toggle.js. Admin code here
+  simply ensures the Project form layout/fields cooperate with that behavior.
 """
 
 from django.contrib import admin
@@ -160,6 +166,7 @@ class CertificateAdmin(admin.ModelAdmin):
         return ("user", "add_project_cta") if obj else ()
 
     def add_project_cta(self, obj):
+        """Button to open the full Project add form pre-filtered to this certificate."""
         add_url = reverse("admin:users_project_add")
         back_url = reverse("admin:users_certificate_change", args=[obj.pk])
         qs = urlencode({"certificate": obj.pk, "next": back_url})
@@ -172,6 +179,7 @@ class CertificateAdmin(admin.ModelAdmin):
     add_project_cta.short_description = "Quick actions"
 
     def save_model(self, request, obj, form, change):
+        # Default owner to current admin user on ADD if none provided.
         if not change and obj.user_id is None:
             obj.user = request.user
         super().save_model(request, obj, form, change)
@@ -186,6 +194,10 @@ class CertificateAdmin(admin.ModelAdmin):
     project_count.admin_order_field = "_project_count"
 
     def save_formset(self, request, form, formset, change):
+        """
+        Keep inline projects consistent with their parent certificate.
+        (Inline is read-only now, but we keep this for safety/back-compat.)
+        """
         instances = formset.save(commit=False)
         parent_cert = form.instance
         for obj in instances:
@@ -209,6 +221,12 @@ class CertificateAdmin(admin.ModelAdmin):
 class ProjectAdmin(admin.ModelAdmin):
     """
     See module docstring above for full UX notes.
+
+    Important UI notes for this admin:
+    - The Certificate FK is *link-only* on the Project form (no add/change/delete/view icons).
+      This prevents accidental certificate edits from the project context.
+    - The date fields’ UX (lock/unlock, min/max, helper text, reset links, error banner)
+      is implemented in the static JS/CSS declared in Media below.
     """
     list_display = ("title", "user", "certificate_link", "status", "work_type", "duration_text", "description_short")
     autocomplete_fields = ("certificate",)
@@ -244,6 +262,12 @@ class ProjectAdmin(admin.ModelAdmin):
         css = {"all": ("users/admin/project_end_date_toggle.css",)}
 
     def get_form(self, request, obj=None, **kwargs):
+        """
+        Customize the Project form:
+        - Description optional (we auto-generate on save when blank).
+        - Start/End help text is removed so JS can inject dynamic help.
+        - Certificate field is forced to *link-only* by disabling all related-object icons.
+        """
         form = super().get_form(request, obj, **kwargs)
 
         # Description optional
@@ -265,8 +289,8 @@ class ProjectAdmin(admin.ModelAdmin):
         # Certificate FK: link-only — hide add/change/delete/view icons next to the widget
         if "certificate" in form.base_fields:
             w = form.base_fields["certificate"].widget
-            # When using autocomplete_fields, Django wraps the widget in RelatedFieldWidgetWrapper.
-            # We toggle the wrapper flags off to remove all related-object action icons.
+            # With autocomplete_fields, Django wraps the widget in RelatedFieldWidgetWrapper.
+            # Turn off all related-object action icons regardless of wrapper/widget type.
             if isinstance(w, RelatedFieldWidgetWrapper) or hasattr(w, "can_add_related"):
                 for attr in ("can_add_related", "can_change_related", "can_delete_related", "can_view_related"):
                     if hasattr(w, attr):
@@ -282,6 +306,7 @@ class ProjectAdmin(admin.ModelAdmin):
     description_short.short_description = "Description"
 
     def get_changeform_initial_data(self, request):
+        # Pre-select certificate when arriving from Certificate page CTA
         initial = super().get_changeform_initial_data(request)
         cert_id = request.GET.get("certificate")
         if cert_id:
@@ -289,6 +314,10 @@ class ProjectAdmin(admin.ModelAdmin):
         return initial
 
     def certificate_link(self, obj):
+        """
+        Render the Certificate column as a link that opens the Certificates changelist
+        filtered to that certificate (read-only navigation; no auto-edit).
+        """
         if not obj.certificate_id:
             return "—"
         url = f"{reverse('admin:users_certificate_changelist')}?{urlencode({'q': obj.certificate_id})}"
@@ -297,6 +326,12 @@ class ProjectAdmin(admin.ModelAdmin):
     certificate_link.admin_order_field = "certificate"
 
     def save_model(self, request, obj, form, change):
+        """
+        - Ensure user is set on add; prefer the linked certificate's owner if present.
+        - Keep duration_text synced.
+        - If “driver” fields changed but description wasn’t manually edited this time,
+          re-generate the description to keep it aligned with guided fields.
+        """
         if not change and obj.user_id is None:
             if obj.certificate_id and obj.certificate and obj.certificate.user_id:
                 obj.user_id = obj.certificate.user_id
@@ -326,6 +361,10 @@ class ProjectAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def response_add(self, request, obj, post_url_continue=None):
+        """
+        If we arrived via the Certificate page CTA, go back there after save.
+        Otherwise, keep Django’s default behavior.
+        """
         next_url = request.GET.get("next")
         if next_url:
             return HttpResponseRedirect(next_url)
