@@ -69,6 +69,7 @@ from datetime import timedelta
 
 import os
 
+
 def _get_bool(env_key: str, default: bool = False) -> bool:
     """Parse booleans from env like '1', 'true', 'yes'."""
     raw = os.environ.get(env_key, str(default))
@@ -88,6 +89,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Reads DJANGO_DEBUG from env. Defaults to True for dev.
 DEBUG = _get_bool("DJANGO_DEBUG", True)
+
+
+# Frontend URL used by the root redirect ("/")
+# Dev defaults to localhost; in prod set FRONTEND_URL env var.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000/")
 
 
 # SECRET_KEY with safe production enforcement
@@ -254,8 +260,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
-#os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
