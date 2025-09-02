@@ -62,14 +62,15 @@ Deployment notes (Render-friendly)
     CORS_ALLOW_ALL_ORIGINS=False + CORS_ALLOWED_ORIGINS=<https://your-fe.example.com>
 """
 
-
 from pathlib import Path
 from datetime import timedelta
-
-
+from urllib.parse import urlparse
 import os
 
 
+# ---------------------------
+# Helpers for env parsing
+# ---------------------------
 def _get_bool(env_key: str, default: bool = False) -> bool:
     """Parse booleans from env like '1', 'true', 'yes'."""
     raw = os.environ.get(env_key, str(default))
@@ -84,6 +85,13 @@ def _get_list(env_key: str, default=None):
         return default
     return [item.strip() for item in raw.split(",") if item.strip()]
 
+def _origin_from(url: str) -> str:
+    """Turn a full URL into an origin string (scheme://host[:port])."""
+    p = urlparse(url or "")
+    if not p.scheme or not p.hostname:
+        return ""
+    return f"{p.scheme}://{p.hostname}" + (f":{p.port}" if p.port else "")
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -91,15 +99,38 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = _get_bool("DJANGO_DEBUG", True)
 
 
-# Frontend URL used by the root redirect ("/")
-# Dev defaults to localhost; in prod set FRONTEND_URL env var.
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000/")
+# --- Frontend URL & CORS/CSRF (dev-friendly defaults) ---
+# Root redirect will send "/" here (see urls.py). In dev we default to Vite's 5173.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173/")
+
+# Dev CORS toggle (allow all while DEBUG=True unless overridden by env).
+# In prod set CORS_ALLOW_ALL_ORIGINS=False and specify CORS_ALLOWED_ORIGINS explicitly.
+CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
+
+# Optional explicit allow-list (use in prod). Example:
+#   CORS_ALLOWED_ORIGINS="https://fe.example.com,https://staging.example.com"
+CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
+if not CORS_ALLOWED_ORIGINS and FRONTEND_URL:
+    # If no list provided, derive a single origin from FRONTEND_URL (e.g., http://localhost:5173)
+    derived = _origin_from(FRONTEND_URL)
+    if derived:
+        CORS_ALLOWED_ORIGINS = [derived]
+
+# Optional: CSRF (useful if you ever move to cookie auth; harmless otherwise)
+CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [])
+if not CSRF_TRUSTED_ORIGINS and FRONTEND_URL:
+    derived = _origin_from(FRONTEND_URL)
+    if derived:
+        CSRF_TRUSTED_ORIGINS = [derived]
+
+# Allow preview subdomains (e.g., Vercel previews) via regex if you need it, from env:
+#   CORS_ALLOWED_ORIGIN_REGEXES="^https?://.*\.vercel\.app$"
+CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
 
 
 # SECRET_KEY with safe production enforcement
 #    - In dev (DEBUG=True): fallback to a dev key if none provided
 #    - In prod (DEBUG=False): require DJANGO_SECRET_KEY
-
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or (
     "django-insecure-fg=!^mo%e4$pi-4bt$=4064i9)licimg7y=9gypm1dl$e^72-z" if DEBUG else None
 )
@@ -107,28 +138,11 @@ if not SECRET_KEY:
     raise RuntimeError("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=False")
 
 
-# Hosts from env (defaults depend on DEBUG) 
+# Hosts from env (defaults depend on DEBUG)
 # Reads DJANGO_ALLOWED_HOSTS as a comma-separated list. Defaults to:
-#           -empty list [] in dev (DEBUG=True)
-#           -["127.0.0.1"] in prod (DEBUG=False)
-
+#   - [] in dev (DEBUG=True)
+#   - ["127.0.0.1"] in prod (DEBUG=False)
 ALLOWED_HOSTS = _get_list("DJANGO_ALLOWED_HOSTS", [] if DEBUG else ["127.0.0.1"])
-
-
-# Dev CORS defaults (lock down in prod via env)
-CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
-
-# If you want to control exact origins in prod, set CORS_ALLOWED_ORIGINS in env:
-# e.g. CORS_ALLOWED_ORIGINS="https://sf-frontend.vercel.app,https://skillfolio.example.com"
-CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS", [])
-
-# These keep your current dev behavior but let you flip to safe prod settings by setting env vars.
-# Lets you safely switch between permissive dev mode and restricted prod mode.
-
-
-# Allow all preview subdomains of vercel project
-CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
-
 
 
 INSTALLED_APPS = [
@@ -151,8 +165,6 @@ INSTALLED_APPS = [
     'users',
 ]
 
-
-
 SWAGGER_SETTINGS = {
     "USE_SESSION_AUTH": False,  # hide Django session login in the docs
     "SECURITY_DEFINITIONS": {
@@ -163,8 +175,7 @@ SWAGGER_SETTINGS = {
             "description": "Paste: Bearer <access-token>",
         }
     },
-} # <- used by drf-yasg to render the Authorize dialog as Bearer
-
+}  # <- used by drf-yasg to render the Authorize dialog as Bearer
 
 MIDDLEWARE = [
     # CORS should be as high as possible
@@ -172,7 +183,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
 
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',      # WhiteNoise will serve Django Admin CSS/JS and any collected assets in production.
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serves static in prod
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -194,9 +205,6 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
-    # Optionally rename query params for FE sugar:
-    # "SEARCH_PARAM": "search",
-    # "ORDERING_PARAM": "ordering",
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
         "rest_framework.parsers.FormParser",
@@ -261,10 +269,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
 
 # --- S3 media storage (optional; prod) ---
 USE_S3 = _get_bool("USE_S3_MEDIA", False)
@@ -276,7 +281,7 @@ if USE_S3:
     AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "us-east-1")
     AWS_S3_SIGNATURE_VERSION = os.environ.get("AWS_S3_SIGNATURE_VERSION", "s3v4")
     AWS_S3_ADDRESSING_STYLE = os.environ.get("AWS_S3_ADDRESSING_STYLE", "virtual")
-    AWS_QUERYSTRING_AUTH = _get_bool("AWS_QUERYSTRING_AUTH", False)  # make URLs clean if files are public
+    AWS_QUERYSTRING_AUTH = _get_bool("AWS_QUERYSTRING_AUTH", False)  # clean URLs if files are public
     AWS_S3_FILE_OVERWRITE = False
     AWS_DEFAULT_ACL = None  # let bucket policy control ACLs
 
@@ -290,8 +295,6 @@ if USE_S3:
         MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
-
-
 
 LOGGING = {
     "version": 1,
