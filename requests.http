@@ -1,0 +1,390 @@
+### base
+@base = http://127.0.0.1:8000
+
+# =========================================================
+# AUTH
+# =========================================================
+
+### Register user
+# @name register1
+POST {{base}}/api/auth/register/
+Content-Type: application/json
+
+{
+  "email": "Hana@example.com",
+  "password": "Test1234"
+}
+
+### Login (TWO FIELDS) — type either full email OR bare username
+# @name login
+POST {{base}}/api/auth/login/
+Content-Type: application/json
+
+{
+  "email_or_username": "hana@example.com",
+  "password": "Test1234"
+}
+
+### Refresh (uses refresh from the 'login' request)
+# @name refresh1
+POST {{base}}/api/auth/refresh/
+Content-Type: application/json
+
+{
+  "refresh": "{{login.response.body.refresh}}"
+}
+
+### Logout (blacklist the refresh)
+# @name logout1
+POST {{base}}/api/auth/logout/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "refresh": "{{login.response.body.refresh}}"
+}
+
+### Refresh again (should fail after logout)
+POST {{base}}/api/auth/refresh/
+Content-Type: application/json
+
+{
+  "refresh": "{{login.response.body.refresh}}"
+}
+
+# =========================================================
+# CERTIFICATES
+# =========================================================
+
+### Create certificate (JSON)
+# @name cert1
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Data Analytics",
+  "issuer": "ALXAfrica",
+  "date_earned": "2024-08-28"
+}
+
+### Create certificate (JSON)
+# @name cert2
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Python",
+  "issuer": "AlBadi3-Skool",
+  "date_earned": "2024-01-31"
+}
+
+### Create certificate (JSON)
+# @name cert3
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "HTML-CSS-JS",
+  "issuer": "Learningm3ana",
+  "date_earned": "2024-11-30"
+}
+
+### Create certificate (JSON)
+# @name cert4
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Goethe",
+  "issuer": "Cefolim",
+  "date_earned": "2024-12-31"
+}
+
+### Create certificate (multipart + file)
+# @name cert_file1
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: multipart/form-data; boundary=sfBoundary
+
+--sfBoundary
+Content-Disposition: form-data; name="title"
+
+Professional Foundations
+--sfBoundary
+Content-Disposition: form-data; name="issuer"
+
+ALXAfrica
+--sfBoundary
+Content-Disposition: form-data; name="date_earned"
+
+2024-02-15
+--sfBoundary
+Content-Disposition: form-data; name="file_upload"; filename="PFcert.png"
+Content-Type: image/png
+
+< C:\Users\azzmo\Downloads\data-analytics certificate - amina-azzmouri.png
+--sfBoundary--
+
+### Big file error case (expect validation error)
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: multipart/form-data; boundary=sfBoundary
+
+--sfBoundary
+Content-Disposition: form-data; name="title"
+
+C++
+--sfBoundary
+Content-Disposition: form-data; name="issuer"
+
+365_days
+--sfBoundary
+Content-Disposition: form-data; name="date_earned"
+
+2024-07-11
+--sfBoundary
+Content-Disposition: form-data; name="file_upload"; filename="big.pdf"
+Content-Type: application/pdf
+
+< C:\Users\azzmo\Downloads\Free_Test_Data_10.5MB_PDF.pdf
+--sfBoundary--
+
+### Future date should fail
+POST {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Future Cert",
+  "issuer": "X",
+  "date_earned": "2099-12-31"
+}
+
+### List certificates (newest first)
+GET {{base}}/api/certificates/
+Authorization: Bearer {{login.response.body.access}}
+
+### Filter by Id (use cert1)
+GET {{base}}/api/certificates/?id={{cert1.response.body.id}}
+Authorization: Bearer {{login.response.body.access}}
+
+### PATCH certificate (cert2)
+PATCH {{base}}/api/certificates/{{cert2.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Python (Updated)"
+}
+
+### PUT certificate (cert3)
+PUT {{base}}/api/certificates/{{cert3.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "HTML-CSS-JS (Updated)",
+  "issuer": "Learningm3ana",
+  "date_earned": "2024-11-30"
+}
+
+### DELETE a certificate (cert4)
+DELETE {{base}}/api/certificates/{{cert4.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+
+# =========================================================
+# PROJECTS
+# =========================================================
+
+### Create a completed project linked to cert1
+# @name proj1
+POST {{base}}/api/projects/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Portfolio Dashboard",
+  "status": "completed",
+  "work_type": "team",
+  "primary_goal": "deliver_feature",
+  "certificate": {{cert1.response.body.id}},
+  "start_date": "2024-08-20",
+  "end_date": "2024-08-28",
+  "description": ""
+}
+
+### Create a planned project (no certificate)
+# @name proj2
+POST {{base}}/api/projects/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Skill-folio capstone project",
+  "status": "planned",
+  "work_type": "individual",
+  "primary_goal": "build_demo",
+  "start_date": "2024-12-01",
+  "description": "Initial draft"
+}
+
+### List projects (newest first)
+GET {{base}}/api/projects/
+Authorization: Bearer {{login.response.body.access}}
+
+### Filter by certificate via alias (?certificateId=)
+GET {{base}}/api/projects/?certificateId={{cert1.response.body.id}}
+Authorization: Bearer {{login.response.body.access}}
+
+### Search by description content (URL encoded)
+GET {{base}}/api/projects/?search=Initial%20draft
+Authorization: Bearer {{login.response.body.access}}
+
+### PATCH project (proj1 -> in_progress)
+PATCH {{base}}/api/projects/{{proj1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+### Unlink certificate from proj1
+PATCH {{base}}/api/projects/{{proj1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "certificate": null
+}
+
+### DELETE proj1
+DELETE {{base}}/api/projects/{{proj1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+
+# =========================================================
+# GOALS & STEPS
+# =========================================================
+
+### Create a goal
+# @name goal1
+POST {{base}}/api/goals/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Ship portfolio v1",
+  "target_projects": 5,
+  "deadline": "2025-12-31",
+  "total_steps": 4,
+  "completed_steps": 1
+}
+
+### List goals
+GET {{base}}/api/goals/
+Authorization: Bearer {{login.response.body.access}}
+
+### Create goal step (ordered)
+# @name step1
+POST {{base}}/api/goalsteps/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "goal": {{goal1.response.body.id}},
+  "title": "Write Outline",
+  "order": 1
+}
+
+### Create goal step (unordered)
+# @name step2
+POST {{base}}/api/goalsteps/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "goal": {{goal1.response.body.id}},
+  "title": "Draft Section A"
+}
+
+### Toggle step2 as done
+PATCH {{base}}/api/goalsteps/{{step2.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "is_done": true
+}
+
+### Reorder step2
+PATCH {{base}}/api/goalsteps/{{step2.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "order": 3
+}
+
+### Delete step1
+DELETE {{base}}/api/goalsteps/{{step1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+
+### Update goal (target change)
+PATCH {{base}}/api/goals/{{goal1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "target_projects": 10
+}
+
+### Delete goal
+DELETE {{base}}/api/goals/{{goal1.response.body.id}}/
+Authorization: Bearer {{login.response.body.access}}
+
+### Invalid goal (negative target)
+POST {{base}}/api/goals/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Bad target",
+  "target_projects": -1,
+  "deadline": "2026-01-01"
+}
+
+### Past-deadline goal (should fail)
+POST {{base}}/api/goals/
+Authorization: Bearer {{login.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Past deadline",
+  "target_projects": 3,
+  "deadline": "2006-01-01"
+}
+
+# =========================================================
+# ANALYTICS & DOCS & ROOT
+# =========================================================
+
+### Summary Count
+GET {{base}}/api/analytics/summary/
+Authorization: Bearer {{login.response.body.access}}
+
+### Goals with progress
+GET {{base}}/api/analytics/goals-progress/
+Authorization: Bearer {{login.response.body.access}}
+
+### Swagger UI
+GET {{base}}/api/docs/
+
+### OpenAPI schema
+GET {{base}}/api/schema/
+
+### Root redirect (should 301/302)
+GET {{base}}/
