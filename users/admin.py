@@ -491,7 +491,6 @@ class GoalAdmin(admin.ModelAdmin):
         "user", "title", "target_projects", "deadline",
         "total_steps", "completed_steps", "steps_progress_display", "created_at",
     )
-    list_editable = ("total_steps", "completed_steps")
     list_filter = ("deadline", "created_at", "total_steps", "completed_steps")
     search_fields = ("title", "target_projects", "user__username", "user__email")
     ordering = ("deadline",)
