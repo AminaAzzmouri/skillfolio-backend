@@ -16,7 +16,7 @@ Endpoints (wired in root urls.py)
 - POST /api/auth/login/    → returns {"access": "...", "refresh": "..."}
 - POST /api/auth/refresh/  → (SimpleJWT's refresh view, see urls.py)
 - POST /api/auth/register/ → create a Django user
-                             (username is auto-derived from the email local-part)  ← NEW
+                             (username is auto-derived from the email **local-part**)  ← UPDATED
 - POST /api/auth/logout/   → blacklist the provided refresh token
 
 Security Notes
@@ -25,8 +25,8 @@ Security Notes
 
 Swagger notes
 - This module adds drf-yasg annotations so /api/docs/ shows request bodies for:
-  * login (username OR email OR login + password)  ← NEW
-  * register (email + password)                    ← UPDATED (docs unchanged, behavior clarified)
+  * login (two fields only: **email_or_username** + **password**)             ← UPDATED
+  * register (email + password)  (username auto from local-part)              ← UPDATED
   * logout (refresh token)
 """
 
@@ -65,78 +65,70 @@ ACCESS_ONLY_SCHEMA = openapi.Schema(
 )
 
 # ---------------------------------------------------------------------------
-# Flexible login: username OR email (or a single 'login' field)
+# Flexible login with TWO FIELDS in docs: email_or_username + password
 # ---------------------------------------------------------------------------
-class FlexibleLoginTokenObtainPairSerializer(TokenObtainPairSerializer):
+class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
-    Accept either:
-      - {"username": "<username>", "password": "..."}  OR
-      - {"email": "<email>", "password": "..."}        OR
-      - {"login": "<username-or-email>", "password": "..."}.
+    API accepts **either** a full email **or** a short username via 'email_or_username',
+    plus 'password'. For backward-compatibility we also accept 'username', 'email', or 'login'.
+    """
+    # New single input field:
+    email_or_username = serializers.CharField(write_only=True, required=False)
 
-    If an email is provided, we resolve it to the account's username so that
-    SimpleJWT can authenticate normally (Django's default backend expects 'username').
-    """
+    # Back-compat aliases (won't show as required in docs):
     username = serializers.CharField(required=False)
     email = serializers.EmailField(write_only=True, required=False)
     login = serializers.CharField(write_only=True, required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Don't force 'username'—we allow email/login instead
+        # We drive auth via our own field; don't force 'username'
         self.fields["username"].required = False
 
     def validate(self, attrs):
         User = get_user_model()
 
-        # Pull identifier from any accepted field
+        # Prefer the new single field, then fall back to older ones
         identifier = (
-            (attrs.pop("login", "") or "").strip()
+            (attrs.pop("email_or_username", "") or "").strip()
+            or (attrs.pop("login", "") or "").strip()
             or (attrs.pop("email", "") or "").strip()
             or (attrs.get("username") or "").strip()
         )
 
         if not identifier:
             raise serializers.ValidationError(
-                {"detail": "Provide 'username' or 'email' (or 'login')."}
+                {"detail": "Provide 'email_or_username' (email or username) and 'password'."}
             )
 
-        # If it's an email, map it to the actual username for SimpleJWT
+        # If identifier looks like an email, resolve it to the actual username
         if "@" in identifier:
             try:
                 user = User.objects.get(email__iexact=identifier)
                 attrs["username"] = user.get_username()
             except User.DoesNotExist:
-                # Let parent class produce the standard invalid-credentials error
+                # Let parent class produce its standard invalid-credentials error
                 attrs["username"] = identifier
         else:
+            # Plain username path
             attrs["username"] = identifier
 
         return super().validate(attrs)
 
 
-# Manual request body schema for Swagger (Swagger 2.0 doesn't support oneOf here)
-LOGIN_REQUEST_SCHEMA = openapi.Schema(
-    type=openapi.TYPE_OBJECT,
-    properties={
-        "username": openapi.Schema(type=openapi.TYPE_STRING, description="Your username (optional if providing email/login)"),
-        "email": openapi.Schema(type=openapi.TYPE_STRING, format="email", description="Your email (optional if providing username/login)"),
-        "login": openapi.Schema(type=openapi.TYPE_STRING, description="Alternative single identifier (username or email)"),
-        "password": openapi.Schema(type=openapi.TYPE_STRING, format="password"),
-    },
-    required=["password"],
-    description="Provide either 'username' or 'email' (or use 'login') plus 'password'.",
-)
-
+# ---- Swagger request body for login (TWO FIELDS ONLY) ----------------------
+class LoginDocSerializer(serializers.Serializer):
+    email_or_username = serializers.CharField(help_text="Type your email address OR your username.")
+    password = serializers.CharField()
 
 class EmailTokenObtainPairView(TokenObtainPairView):
-    """POST /api/auth/login/ — Returns refresh & access JWTs (username OR email)."""
-    serializer_class = FlexibleLoginTokenObtainPairSerializer
+    """POST /api/auth/login/ — Returns refresh & access JWTs (email_or_username + password)."""
+    serializer_class = EmailOrUsernameTokenObtainPairSerializer
 
     @swagger_auto_schema(
         tags=["Auth"],
-        operation_description="Log in with **username or email** and receive access/refresh JWTs.",
-        request_body=LOGIN_REQUEST_SCHEMA,
+        operation_description="Log in with **email_or_username** (email or the short username) and **password**.",
+        request_body=LoginDocSerializer,  # ← shows exactly two fields in /api/docs
         security=[],  # public endpoint
         responses={
             200: openapi.Response("JWT pair", TOKENS_PAIR_SCHEMA),
@@ -171,7 +163,7 @@ User = get_user_model()
 
 def _suggest_username_from_email(email: str) -> str:
     """
-    Build a clean, unique username from the email local-part.               ← NEW
+    Build a clean, unique username from the **email local-part**.            ← UPDATED
     - keep: a-z 0-9 . _ -
     - others → '_'
     - ensure unique with -2, -3, ...
@@ -182,7 +174,7 @@ def _suggest_username_from_email(email: str) -> str:
     limit = 150
 
     cand = base[:limit]
-    if not User.objects.filter(username=cand).exists():
+    if not User.objects.filter(username__iexact=cand).exists():
         return cand
 
     n = 2
@@ -190,7 +182,7 @@ def _suggest_username_from_email(email: str) -> str:
         suffix = f"-{n}"
         head = base[: max(1, limit - len(suffix))]
         cand = f"{head}{suffix}"
-        if not User.objects.filter(username=cand).exists():
+        if not User.objects.filter(username__iexact=cand).exists():
             return cand
         n += 1
 
@@ -200,7 +192,8 @@ def _suggest_username_from_email(email: str) -> str:
     tags=["Auth"],
     operation_description=(
         "Register a new user with email + password.\n\n"
-        "Username is **auto-derived from the email local-part** (e.g., 'john' from 'john@gmail.com')."
+        "Username is **automatically derived from the part before '@'** "
+        "(e.g., 'happy' from 'happy@example.com'). If taken, '-2', '-3', … are appended."
     ),
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
@@ -226,9 +219,8 @@ def register(request):
     if User.objects.filter(email__iexact=email).exists():
         return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Auto-generate username from the email's local-part
+    # Store short username derived from local-part (NOT the full email)      ← UPDATED
     username = _suggest_username_from_email(email)
-
     user = User.objects.create_user(username=username, email=email, password=password)
     return Response({"id": user.id, "username": user.username, "email": user.email}, status=status.HTTP_201_CREATED)
 
