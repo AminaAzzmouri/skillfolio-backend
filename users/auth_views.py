@@ -27,7 +27,6 @@ Swagger notes
   * register (email + password)
   * logout (refresh token)
 """
-
 from django.contrib.auth import get_user_model
 from rest_framework import status, permissions, serializers
 from rest_framework.decorators import api_view, permission_classes
@@ -44,6 +43,22 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # Swagger / OpenAPI
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+
+# Common response schemas for docs
+TOKENS_PAIR_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "access": openapi.Schema(type=openapi.TYPE_STRING, description="Access JWT"),
+        "refresh": openapi.Schema(type=openapi.TYPE_STRING, description="Refresh JWT"),
+    },
+)
+ACCESS_ONLY_SCHEMA = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "access": openapi.Schema(type=openapi.TYPE_STRING, description="New access JWT"),
+        # May also include 'refresh' if ROTATE_REFRESH_TOKENS=True (not required).
+    },
+)
 
 # -----------------------------------------------------------------------------
 # Email-based login
@@ -63,14 +78,32 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     """POST /api/auth/login/ — Returns refresh & access JWTs."""
     serializer_class = EmailTokenObtainPairSerializer
 
-    @swagger_auto_schema(tags=["Auth"], operation_description="Log in and receive access/refresh JWTs.")
+    @swagger_auto_schema(
+        tags=["Auth"],
+        operation_description="Log in and receive access/refresh JWTs.",
+        security=[],  # public endpoint
+        responses={
+            200: openapi.Response("JWT pair", TOKENS_PAIR_SCHEMA),
+            400: "Bad Request",
+            401: "Invalid credentials",
+        },
+    )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
 
 class TokenRefreshTaggedView(_TokenRefreshView):
     """POST /api/auth/refresh/ — Exchange refresh for a new access token."""
-    @swagger_auto_schema(tags=["Auth"], operation_description="Refresh access token using a refresh JWT.")
+    @swagger_auto_schema(
+        tags=["Auth"],
+        operation_description="Refresh access token using a refresh JWT.",
+        security=[],  # public endpoint
+        responses={
+            200: openapi.Response("New access token", ACCESS_ONLY_SCHEMA),
+            400: "Bad Request",
+            401: "Invalid or blacklisted refresh token",
+        },
+    )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -125,7 +158,7 @@ logout_request_schema = openapi.Schema(
     tags=["Auth"],
     operation_description="Blacklist a submitted refresh token to invalidate future use.",
     request_body=logout_request_schema,
-    responses={205: "Reset Content", 400: "Bad Request"},
+    responses={205: "Reset Content", 400: "Bad Request", 401: "Unauthorized"},
 )
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
@@ -139,5 +172,3 @@ def logout(request):
         return Response({"detail": "Successfully logged out."}, status=status.HTTP_205_RESET_CONTENT)
     except Exception:
         return Response({"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST)
-
-

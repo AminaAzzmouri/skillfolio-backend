@@ -39,6 +39,15 @@ NEW
 - ProjectViewSet:
   * Accepts ?certificateId=<id> alias for filtering.
     WHY: Keeps FE query flexible and simple.
+
+API Docs Alignment (Swagger / drf-yasg)
+===============================================================================
+drf-yasg targets Swagger 2.0 (not OpenAPI 3), so we AVOID oneOf/anyOf.
+Instead, we:
+- Provide a single unified request schema for Projects and document the
+  status-aware rules in field descriptions (Admin parity).
+- Keep field ORDER in request schemas to match Admin forms.
+- Reuse Admin wording for labels/help so /api/docs reads like the Admin UI.
 """
 
 from django.contrib.auth import get_user_model
@@ -99,9 +108,13 @@ class OwnerScopedModelViewSet(viewsets.ModelViewSet):
 class CertificateViewSet(OwnerScopedModelViewSet):
     """
     Certificates API
-    - Filtering:   ?issuer=<str>&date_earned=<YYYY-MM-DD>
+    - Filtering:   ?issuer=<str>&date_earned=<YYYY-MM-DD>&id=<pk>
     - Search:      ?search=<substring> (title, issuer)
     - Ordering:    ?ordering=date_earned | -date_earned | title | -title
+
+    Notes for /api/docs
+    - Each certificate row is annotated with `project_count` (read-only int).
+      This mirrors the Admin list column showing how many Projects are linked.
     """
     # Annotate with related projects count (distinct for safety)
     queryset = Certificate.objects.all().annotate(
@@ -113,6 +126,63 @@ class CertificateViewSet(OwnerScopedModelViewSet):
     ordering_fields = ["date_earned", "title"]
     ordering = ["-date_earned"]  # default newest first
 
+    if HAS_YASG:
+        _resp_list_ok = openapi.Response("OK", CertificateSerializer(many=True))
+        _resp_item_ok = openapi.Response("OK", CertificateSerializer())
+        _resp_created = openapi.Response("Created", CertificateSerializer())
+        _resp_ok = _resp_item_ok
+
+        @swagger_auto_schema(
+            operation_description=(
+                "List your certificates (owner-scoped).\n\n"
+                "Certificates API\n\n"
+                "• Filtering: `?issuer=` & `date_earned=<YYYY-MM-DD>` & `id`\n"
+                "• Search: `?search=` (title, issuer)\n"
+                "• Ordering: `?ordering=date_earned | -date_earned | title | -title`\n\n"
+                "Notes for /api/docs\n\n"
+                "• Each certificate row is annotated with **project_count** (read-only int). "
+                "This mirrors the Admin list column showing how many Projects are linked."
+            ),
+            responses={200: _resp_list_ok, 401: "Unauthorized"},
+        )
+        def list(self, request, *args, **kwargs):
+            return super().list(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Retrieve a certificate you own by ID.",
+            responses={200: _resp_item_ok, 401: "Unauthorized", 404: "Not Found"},
+        )
+        def retrieve(self, request, *args, **kwargs):
+            return super().retrieve(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Create a certificate.",
+            responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
+        )
+        def create(self, request, *args, **kwargs):
+            return super().create(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Fully update a certificate (PUT).",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def update(self, request, *args, **kwargs):
+            return super().update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Partially update a certificate (PATCH).",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def partial_update(self, request, *args, **kwargs):
+            return super().partial_update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Delete a certificate.",
+            responses={204: "No Content", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def destroy(self, request, *args, **kwargs):
+            return super().destroy(request, *args, **kwargs)
+
 
 class ProjectViewSet(OwnerScopedModelViewSet):
     """
@@ -121,6 +191,20 @@ class ProjectViewSet(OwnerScopedModelViewSet):
                    Also accepts: ?certificateId=<id> (alias)
     - Search:      ?search=<substring> (title, description[, other fields if present])
     - Ordering:    ?ordering=date_created | -date_created | title | -title
+
+    Status-aware rules (same as Admin)
+    - Start date is required for all statuses.
+    - Planned:      start_date >= today.
+    - In Progress:  start_date <= today.
+    - Completed:    start_date <  today (yesterday or earlier),
+                    end_date required,
+                    end_date > start_date,
+                    end_date <= today.
+    - If status != Completed, end_date must be empty (server will clear it on save).
+
+    Description
+    - If blank on create/update, the server generates a status-aware description
+      using the same phrasing as the Admin form.
     """
     queryset = Project.objects.select_related("certificate").all()
     serializer_class = ProjectSerializer
@@ -138,13 +222,140 @@ class ProjectViewSet(OwnerScopedModelViewSet):
             qs = qs.filter(certificate_id=cert_id)
         return qs
 
+    if HAS_YASG:
+        _certificate_id_param = openapi.Parameter(
+            name="certificateId",
+            in_=openapi.IN_QUERY,
+            type=openapi.TYPE_INTEGER,
+            required=False,
+            description="Alias for ?certificate=<id>. Filters projects by linked certificate ID.",
+        )
+
+        _resp_list_ok = openapi.Response("OK", ProjectSerializer(many=True))
+        _resp_item_ok = openapi.Response("OK", ProjectSerializer())
+        _resp_created = openapi.Response("Created", ProjectSerializer())
+        _resp_ok = _resp_item_ok
+
+        @swagger_auto_schema(
+            manual_parameters=[_certificate_id_param],
+            operation_description=(
+                "List your projects (owner-scoped). Use `?certificate=<id>` or the alias `?certificateId=<id>` "
+                "to filter by linked certificate. Status-aware validation matches the Admin interface."
+            ),
+            responses={200: _resp_list_ok, 401: "Unauthorized"},
+        )
+        def list(self, request, *args, **kwargs):
+            return super().list(request, *args, **kwargs)
+
+        # Request body that mirrors Admin field ORDER and help (single schema for Swagger 2)
+        _project_props = {
+            "title": openapi.Schema(type=openapi.TYPE_STRING, description="Project title."),
+            "status": openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=[Project.STATUS_PLANNED, Project.STATUS_IN_PROGRESS, Project.STATUS_COMPLETED],
+                description=(
+                    "Project status. Rules:\n"
+                    "- Planned → start_date must be today or future; end_date must be empty.\n"
+                    "- In Progress → start_date must be today or past; end_date must be empty.\n"
+                    "- Completed → start_date must be before today, end_date is required, end_date > start_date, and not in the future."
+                ),
+            ),
+            "start_date": openapi.Schema(type=openapi.TYPE_STRING, format="date", description="Start date (YYYY-MM-DD). Required for all statuses."),
+            "end_date": openapi.Schema(type=openapi.TYPE_STRING, format="date", description="End date (YYYY-MM-DD). Only for Completed; must be after start_date and not in the future."),
+            "work_type": openapi.Schema(type=openapi.TYPE_STRING, enum=["individual", "team"], description="Was this an individual or team project?"),
+            "duration_text": openapi.Schema(type=openapi.TYPE_STRING, description="Read-only in Admin. Derived from dates on the server when status=completed."),
+            "primary_goal": openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=["practice_skill", "deliver_feature", "build_demo", "solve_problem"],
+                description="The main intent behind this project."
+            ),
+            "certificate": openapi.Schema(type=openapi.TYPE_INTEGER, description="Optional FK to a Certificate (ID)."),
+            "problem_solved": openapi.Schema(type=openapi.TYPE_STRING, description="(Optional) What problem did this project solve? (Admin label varies by status)"),
+            "tools_used": openapi.Schema(type=openapi.TYPE_STRING, description="(Optional) Tools/technologies used (or to be used)"),
+            "skills_used": openapi.Schema(type=openapi.TYPE_STRING, description="(Optional) Skills practiced (free text or CSV)"),
+            "challenges_short": openapi.Schema(type=openapi.TYPE_STRING, description="(Optional) Key challenges faced"),
+            "skills_to_improve": openapi.Schema(type=openapi.TYPE_STRING, description="(Optional) What to practice more next time"),
+            "description": openapi.Schema(type=openapi.TYPE_STRING, description="If blank, the server will auto-generate a status-aware description."),
+        }
+
+        _project_required = ["title", "start_date"]
+
+        _project_request_schema = openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            # ORDER mirrors Admin form:
+            # title → status → start_date → end_date → work_type → duration_text → primary_goal → certificate →
+            # problem_solved → tools_used → skills_used → challenges_short → skills_to_improve → description
+            properties=_project_props,
+            required=_project_required,
+            example={
+                "title": "Portfolio Website",
+                "status": "completed",
+                "start_date": "2025-07-01",
+                "end_date": "2025-07-20",
+                "work_type": "individual",
+                "primary_goal": "build_demo",
+                "certificate": None,
+                "problem_solved": "Showcase personal projects and skills",
+                "tools_used": "Django, React, Tailwind",
+                "skills_used": "Python, APIs, CSS",
+                "challenges_short": "SEO, image optimization",
+                "skills_to_improve": "Accessibility",
+                "description": ""
+            },
+        )
+
+        @swagger_auto_schema(
+            request_body=_project_request_schema,
+            operation_description="Create a project. Field order and rules mirror the Admin form. If `description` is blank, it will be generated server-side.",
+            responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
+        )
+        def create(self, request, *args, **kwargs):
+            return super().create(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            request_body=_project_request_schema,
+            operation_description="Fully update a project (PUT).",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def update(self, request, *args, **kwargs):
+            return super().update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            request_body=_project_request_schema,
+            operation_description="Partially update a project (PATCH). Status-aware date rules apply; `description` is regenerated if driver fields change and you didn't edit it.",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def partial_update(self, request, *args, **kwargs):
+            return super().partial_update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Retrieve a project you own by ID. Status-aware fields/validation match Admin.",
+            responses={200: _resp_item_ok, 401: "Unauthorized", 404: "Not Found"},
+        )
+        def retrieve(self, request, *args, **kwargs):
+            return super().retrieve(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Delete a project.",
+            responses={204: "No Content", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def destroy(self, request, *args, **kwargs):
+            return super().destroy(request, *args, **kwargs)
+
 
 class GoalViewSet(OwnerScopedModelViewSet):
     """
     Goals API
     - Filtering:   ?deadline=<YYYY-MM-DD>
     - Ordering:    ?ordering=created_at | -created_at | deadline | -deadline
-                   | total_steps | -total_steps | completed_steps | -completed_steps
+                   | total_steps | -total_steps | completed_steps | -completed_steps | title | -title
+
+    Admin parity
+    - Field naming in /api/docs uses Admin-like titles:
+      * target_projects  → "Target number of projects to build"
+      * total_steps      → "Overall required steps" (optional)
+      * completed_steps  → "Accomplished steps" (optional)
+    - Field order in request body mirrors Admin form: title → target_projects → deadline → total_steps → completed_steps.
     """
     queryset = Goal.objects.all()
     serializer_class = GoalSerializer
@@ -154,21 +365,67 @@ class GoalViewSet(OwnerScopedModelViewSet):
 
     # Optional: schema docs for create/partial update (only if drf-yasg is present)
     if HAS_YASG:
+        _resp_list_ok = openapi.Response("OK", GoalSerializer(many=True))
+        _resp_item_ok = openapi.Response("OK", GoalSerializer())
+        _resp_created = openapi.Response("Created", GoalSerializer())
+        _resp_ok = _resp_item_ok
+
         _steps_props = {
+            # ORDER mirrors Admin form: title → target_projects → deadline → total_steps → completed_steps
             "title": openapi.Schema(type=openapi.TYPE_STRING, description="Goal title"),
-            "target_projects": openapi.Schema(type=openapi.TYPE_INTEGER, description="Target number of completed projects"),
-            "deadline": openapi.Schema(type=openapi.TYPE_STRING, format="date", description="Goal deadline (YYYY-MM-DD)"),
-            "total_steps": openapi.Schema(type=openapi.TYPE_INTEGER, description="Optional checklist total"),
-            "completed_steps": openapi.Schema(type=openapi.TYPE_INTEGER, description="Optional checklist completed"),
+            "target_projects": openapi.Schema(
+                type=openapi.TYPE_INTEGER,
+                title="Target number of projects to build",
+                description="Must be ≥ 1.",
+            ),
+            "deadline": openapi.Schema(
+                type=openapi.TYPE_STRING,
+                format="date",
+                description="Goal deadline (YYYY-MM-DD). Cannot be in the past.",
+            ),
+            "total_steps": openapi.Schema(
+                type=openapi.TYPE_INTEGER,
+                title="Overall required steps",
+                description="Optional checklist total (defaults to 0).",
+            ),
+            "completed_steps": openapi.Schema(
+                type=openapi.TYPE_INTEGER,
+                title="Accomplished steps",
+                description="Optional completed count (capped to total_steps).",
+            ),
         }
+
+        @swagger_auto_schema(
+            operation_description=(
+                "List your goals (owner-scoped).\n\n"
+                "Goals API\n\n"
+                "• Filtering: `?deadline=<YYYY-MM-DD>`\n"
+                "• Ordering: `?ordering=created_at | -created_at | deadline | -deadline | total_steps | -total_steps | "
+                "completed_steps | -completed_steps | title | -title`\n\n"
+                "Admin parity\n\n"
+                "• Field naming in /api/docs uses Admin-like titles.\n"
+                "• Field order in request body mirrors Admin forms."
+            ),
+            responses={200: _resp_list_ok, 401: "Unauthorized"},
+        )
+        def list(self, request, *args, **kwargs):
+            return super().list(request, *args, **kwargs)
 
         @swagger_auto_schema(
             request_body=openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties=_steps_props,
                 required=["title", "target_projects", "deadline"],
+                example={
+                    "title": "Finish 3 portfolio projects",
+                    "target_projects": 3,
+                    "deadline": "2025-12-31",
+                    "total_steps": 6,
+                    "completed_steps": 2
+                },
             ),
-            responses={201: GoalSerializer},
+            responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
+            operation_description="Create a goal. Field titles/order mirror Admin; steps are optional.",
         )
         def create(self, request, *args, **kwargs):
             return super().create(request, *args, **kwargs)
@@ -178,10 +435,37 @@ class GoalViewSet(OwnerScopedModelViewSet):
                 type=openapi.TYPE_OBJECT,
                 properties=_steps_props,
             ),
-            responses={200: GoalSerializer},
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+            operation_description="Fully update a goal (PUT).",
+        )
+        def update(self, request, *args, **kwargs):
+            return super().update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            request_body=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties=_steps_props,
+                example={"completed_steps": 3},
+            ),
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+            operation_description="Partially update a goal (PATCH). Titles/order mirror Admin.",
         )
         def partial_update(self, request, *args, **kwargs):
             return super().partial_update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Retrieve a goal you own by ID. Titles/order match Admin.",
+            responses={200: _resp_item_ok, 401: "Unauthorized", 404: "Not Found"},
+        )
+        def retrieve(self, request, *args, **kwargs):
+            return super().retrieve(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Delete a goal.",
+            responses={204: "No Content", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def destroy(self, request, *args, **kwargs):
+            return super().destroy(request, *args, **kwargs)
 
 
 class GoalStepViewSet(viewsets.ModelViewSet):
@@ -211,6 +495,62 @@ class GoalStepViewSet(viewsets.ModelViewSet):
         if goal.user != self.request.user:
             raise serializers.ValidationError("You do not own this goal.")
         serializer.save()
+
+    if HAS_YASG:
+        _resp_list_ok = openapi.Response("OK", GoalStepSerializer(many=True))
+        _resp_item_ok = openapi.Response("OK", GoalStepSerializer())
+        _resp_created = openapi.Response("Created", GoalStepSerializer())
+        _resp_ok = _resp_item_ok
+
+        @swagger_auto_schema(
+            operation_description=(
+                "List goal steps you own (owner-scoped via parent goal).\n\n"
+                "GoalStep API\n\n"
+                "• Filtering: `?goal=` & `is_done=`\n"
+                "• Search: `?search=` (title)\n"
+                "• Ordering: `?ordering=order | -order | created_at | -created_at`\n\n"
+                "Security\n\n"
+                "• Queryset is limited to steps where the parent goal belongs to the current user."
+            ),
+            responses={200: _resp_list_ok, 401: "Unauthorized"},
+        )
+        def list(self, request, *args, **kwargs):
+            return super().list(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Retrieve a goal step by ID (owner-scoped via parent goal).",
+            responses={200: _resp_item_ok, 401: "Unauthorized", 404: "Not Found"},
+        )
+        def retrieve(self, request, *args, **kwargs):
+            return super().retrieve(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Create a goal step (parent goal must belong to you).",
+            responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
+        )
+        def create(self, request, *args, **kwargs):
+            return super().create(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Fully update a goal step (PUT).",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def update(self, request, *args, **kwargs):
+            return super().update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Partially update a goal step (PATCH).",
+            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def partial_update(self, request, *args, **kwargs):
+            return super().partial_update(request, *args, **kwargs)
+
+        @swagger_auto_schema(
+            operation_description="Delete a goal step.",
+            responses={204: "No Content", 401: "Unauthorized", 404: "Not Found"},
+        )
+        def destroy(self, request, *args, **kwargs):
+            return super().destroy(request, *args, **kwargs)
 
 
 # -----------------------------------------------------------------------------
