@@ -130,6 +130,12 @@ Notes
   ensures the forms cooperate with that behavior.
 """
 
+"""
+users/admin.py — Django Admin configuration for Skillfolio
+
+[... trimmed header stays the same; keeping your full docstring ...]
+"""
+
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.safestring import mark_safe
@@ -203,8 +209,8 @@ class CertificateAdmin(admin.ModelAdmin):
 
     def get_form(self, request, obj=None, **kwargs):
         """
-        Remove the static help on 'date_earned' so the JS can render a single,
-        status-agnostic helper under the field (and avoid duplicate messages).
+        Remove the static help on 'date_earned' so JS can render a single helper
+        and avoid duplicate messages.
         """
         form = super().get_form(request, obj, **kwargs)
         if "date_earned" in form.base_fields:
@@ -238,15 +244,15 @@ class CertificateAdmin(admin.ModelAdmin):
         """
         Show the number of linked projects; when > 0, make it a link to the
         Projects changelist filtered to this certificate.
-        Uses the standard FK filter param: certificate__id__exact=<cert_id>.
+        Uses FK filter param: certificate__id__exact=<cert_id>.
         """
         count = getattr(obj, "_project_count", obj.projects.count())
         if count:
             url = f"{reverse('admin:users_project_changelist')}?{urlencode({'certificate__id__exact': obj.pk})}"
-        return mark_safe(f'<a href="{url}">{count}</a>')
+            return mark_safe(f'<a href="{url}">{count}</a>')
         return "0"
-        project_count.short_description = "Projects"
-        project_count.admin_order_field = "_project_count"
+    project_count.short_description = "Projects"
+    project_count.admin_order_field = "_project_count"
 
     def save_formset(self, request, form, formset, change):
         """
@@ -279,13 +285,11 @@ class ProjectAdmin(admin.ModelAdmin):
 
     Important UI notes for this admin:
     - The Certificate FK is *link-only* on the Project form (no add/change/delete/view icons).
-      This prevents accidental certificate edits from the project context.
     - The date fields’ UX (lock/unlock, min/max, helper text, reset links, error banner)
       is implemented in the static JS/CSS declared in Media below.
 
     Redirect behavior:
     - If the Project form URL includes ?next=<url>, after Save we redirect to that URL.
-      (Used by the Certificate inline “Change” link and the “Add project for this certificate” CTA.)
     - Otherwise, Save returns to the Projects list (changelist).
     - “Save and continue” / “Save and add another” keep default Django behavior.
     """
@@ -462,12 +466,26 @@ class GoalStepInline(admin.TabularInline):
 
 @admin.register(Goal)
 class GoalAdmin(admin.ModelAdmin):
-    def steps_progress_display(self, obj):
-        try:
-            return f"{obj.steps_progress_percent}%"
-        except Exception:
-            return "—"
-    steps_progress_display.short_description = "Steps progress"
+    """
+    Goal admin tweaks:
+    - Vertical layout (no side-by-side tuples).
+    - Labels in the form only:
+        * target_projects -> “Target number of projects to build”
+        * total_steps     -> “Overall required steps”
+        * completed_steps -> “Accomplished steps”
+    - Form-level rules:
+        * completed_steps is optional (required=False)
+        * total_steps is optional (required=False)
+        * target_projects min=1 (HTML + field.min_value)
+    - Enhanced UX via JS/CSS:
+        * in-input calendar for Deadline (min=today, past dates greyed)
+        * per-field Reset + Reset all
+        * top error banner that hides/reappears as fields are fixed
+    """
+    # Load goal-specific JS and reuse shared CSS styles.
+    class Media:
+        js = ("users/admin/goal_form_ui.js",)
+        css = {"all": ("users/admin/project_end_date_toggle.css",)}
 
     list_display = (
         "user", "title", "target_projects", "deadline",
@@ -479,11 +497,54 @@ class GoalAdmin(admin.ModelAdmin):
     ordering = ("deadline",)
     inlines = [GoalStepInline]
 
+    # Vertical layout: each field on its own row
     fields = (
         "user",
         "title",
-        ("target_projects", "deadline"),
-        ("total_steps", "completed_steps"),
+        "target_projects",
+        "deadline",
+        "total_steps",
+        "completed_steps",
         "created_at",
     )
     readonly_fields = ("created_at",)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+
+        # Labels (admin-only; model verbose_names unchanged)
+        if "target_projects" in form.base_fields:
+            form.base_fields["target_projects"].label = "Target number of projects to build"
+            # Enforce min=1 in admin form + HTML attrs
+            try:
+                form.base_fields["target_projects"].min_value = 1
+            except Exception:
+                pass
+            widget = form.base_fields["target_projects"].widget
+            try:
+                widget.input_type = "number"
+            except Exception:
+                pass
+            widget.attrs.update({"min": "1", "step": "1"})
+
+        if "total_steps" in form.base_fields:
+            form.base_fields["total_steps"].label = "Overall required steps"
+            form.base_fields["total_steps"].required = False
+
+        if "completed_steps" in form.base_fields:
+            form.base_fields["completed_steps"].label = "Accomplished steps"
+            form.base_fields["completed_steps"].required = False
+
+        # Remove static help so the JS can show a single dynamic helper under Deadline
+        if "deadline" in form.base_fields:
+            form.base_fields["deadline"].help_text = ""
+
+        return form
+
+    # Display helper for progress %
+    def steps_progress_display(self, obj):
+        try:
+            return f"{obj.steps_progress_percent}%"
+        except Exception:
+            return "—"
+    steps_progress_display.short_description = "Steps progress"
