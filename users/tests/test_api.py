@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
@@ -28,7 +29,7 @@ class SkillfolioAPISmokeTests(APITestCase):
       - GoalSteps: CRUD + parent Goal counters auto-sync, forbid cross-user step creation
       - Analytics: /api/analytics/summary and /api/analytics/goals-progress
       - Docs: /api/docs/ (Swagger) and /api/schema/
-      - Root redirect: "/" → settings.FRONTEND_URL
+      - Root redirect: "/" → settings.FRONTEND_URL (dynamic, not hard-coded)
       - Owner scoping: cannot read other user's objects
     """
 
@@ -332,7 +333,8 @@ class SkillfolioAPISmokeTests(APITestCase):
         # PATCH status → in_progress (allowed)
         p1 = self.client.patch(f"/api/projects/{proj_id}/", {"status": "in_progress"}, format="json")
         self.assertEqual(p1.status_code, status.HTTP_200_OK, p1.data)
-        self.assertEqual(p1.data["status"], "in_progress")
+        we = p1.data["status"]
+        self.assertEqual(we, "in_progress")
 
         # Link certificate
         p2 = self.client.patch(f"/api/projects/{proj_id}/", {"certificate": cert["id"]}, format="json")
@@ -655,9 +657,19 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(schema.status_code, status.HTTP_200_OK)
 
     def test_root_redirects_to_frontend(self):
+        """
+        Root ("/") should 301/302 redirect to settings.FRONTEND_URL.
+        We compare against the value in settings (normalized with a trailing slash).
+        """
         res = self.client.get("/")
         self.assertIn(res.status_code, (301, 302))
-        self.assertIn("http://localhost:3000/", res["Location"])
+
+        expected = settings.FRONTEND_URL or ""
+        # normalize to include a trailing slash
+        if expected and not expected.endswith("/"):
+            expected = expected + "/"
+
+        self.assertEqual(res["Location"], expected)
 
     # -----------------------
     # Owner scoping hardening
