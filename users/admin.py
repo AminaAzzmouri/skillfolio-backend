@@ -235,9 +235,18 @@ class CertificateAdmin(admin.ModelAdmin):
         return qs.annotate(_project_count=Count("projects", distinct=True))
 
     def project_count(self, obj):
-        return getattr(obj, "_project_count", obj.projects.count())
-    project_count.short_description = "Projects"
-    project_count.admin_order_field = "_project_count"
+        """
+        Show the number of linked projects; when > 0, make it a link to the
+        Projects changelist filtered to this certificate.
+        Uses the standard FK filter param: certificate__id__exact=<cert_id>.
+        """
+        count = getattr(obj, "_project_count", obj.projects.count())
+        if count:
+            url = f"{reverse('admin:users_project_changelist')}?{urlencode({'certificate__id__exact': obj.pk})}"
+        return mark_safe(f'<a href="{url}">{count}</a>')
+        return "0"
+        project_count.short_description = "Projects"
+        project_count.admin_order_field = "_project_count"
 
     def save_formset(self, request, form, formset, change):
         """
