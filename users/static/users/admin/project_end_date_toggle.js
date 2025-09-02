@@ -22,6 +22,11 @@
 //   • Per-field “Reset” link beside each editable field.
 //   • “Reset all” button in the submit row resets the entire form.
 //
+// - Certificate field is **link-only** on Project add/edit:
+//   • Any Django related-object action icons (add/change/delete/view) rendered next to the
+//     Certificate widget are removed here as a defensive client-side clamp (server-side flags
+//     are already disabled in admin.py).
+//
 // NOTE: We still rely on model.clean() for final server-side enforcement.
 
 (function () {
@@ -118,7 +123,7 @@
     setTimeout(updateTopErrorNoteVisibility, 0);
   }
 
-  // ---- Django admin “date shortcuts” helpers ----
+  // ---- Django admin “date shortcuts” helpers -----
   function shortcutsFor(input) {
     const row = input.closest(".form-row") || input.parentElement;
     if (!row) return null;
@@ -212,7 +217,7 @@
     D.__sf_patched = true;
 
     const origHandle = D.handleCalendarCallback ? D.handleCalendarCallback.bind(D) : null;
-    const origDismiss = D.dismissCalendar ? D.dismissCalendar.bind(D) : null;
+       const origDismiss = D.dismissCalendar ? D.dismissCalendar.bind(D) : null;
 
     function afterPick(num) {
       try {
@@ -329,6 +334,19 @@
     submitRow.appendChild(btn);
   }
 
+  // Defensive clamp: remove any related-object action icons next to Certificate
+  function hideCertificateRelatedActions() {
+    const cert = document.getElementById("id_certificate");
+    if (!cert) return;
+    const wrap = cert.closest(".related-widget-wrapper") || cert.parentElement;
+    if (!wrap) return;
+    // Buttons/links Django may render around the FK widget
+    wrap.querySelectorAll(
+      "a.related-widget-wrapper-link, " +         // generic class in newer Django versions
+      "a.add-related, a.change-related, a.delete-related, a.view-related" // older classes
+    ).forEach(a => a.remove());
+  }
+
   onReady(function () {
     const form = document.querySelector("#content-main form");
     if (!form) return;
@@ -342,6 +360,9 @@
     setDateMode(start, true);
     toggleShortcuts(start, false);
     toggleShortcuts(end, false);
+
+    // Defensive: ensure Certificate widget has no add/edit/delete/view icons
+    hideCertificateRelatedActions();
 
     updateTopErrorNoteVisibility();
 
