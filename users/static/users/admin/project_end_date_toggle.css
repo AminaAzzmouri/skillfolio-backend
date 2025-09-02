@@ -1,0 +1,57 @@
+/* Visuals for locked End date */
+input.sf-disabled {
+  background: #f5f5f5 !important;
+  color: #777 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* Hide the calendar picker icon when disabled (WebKit/Blink) */
+input.sf-disabled::-webkit-calendar-picker-indicator { display: none; }
+
+/* Helper note under Start/End date (dynamic help) */
+.sf-note {
+  margin-top: 4px;
+  color: #666;
+  font-size: 12px;
+}
+
+/* Hide rows dynamically based on status */
+.sf-hide { display: none !important; }
+
+/* Force Start date label not bold */
+.form-row.field-start_date label,
+label[for="id_start_date"] { font-weight: normal !important; }
+
+/* Grey out/disable invalid days inside Django admin popup calendar */
+.calendarbox td.sf-cal-disabled,
+.calendarbox td.sf-cal-disabled a {
+  opacity: 0.35 !important;
+  pointer-events: none !important;
+}
+
+/* --- Reset controls --- */
+.sf-reset-link {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #666;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.sf-reset-link:hover { color: #333; }
+
+.sf-reset-all-button {
+  margin-left: 8px;
+  padding: 6px 10px;
+  border: 1px solid #d0d0d0;
+  background: #fafafa;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sf-reset-all-button:hover { background: #f0f0f0; }
+
+/* Hard-hide Django’s outside date shortcuts so the native in-input icon is the only one */
+.form-row.field-start_date .datetimeshortcuts,
+.form-row.field-end_date .datetimeshortcuts {
+  display: none !important;
+}
