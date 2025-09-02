@@ -77,7 +77,6 @@ def validate_file_size_5mb(f):
 
 
 class Certificate(models.Model):
-    # (unchanged)
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="certificates",
         help_text="Owner of this certificate."
@@ -371,14 +370,50 @@ class Project(models.Model):
 
 
 class Goal(models.Model):
-    # (unchanged from your last version)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="goals", help_text="Owner of this goal.")
+    """
+    A user-scoped target with optional checklist support.
+
+    Label updates (model-level):
+      - target_projects   -> "Target number of projects to build"
+      - total_steps       -> "Overall required steps"
+      - completed_steps   -> "Accomplished steps"
+    These names now propagate to admin, forms, and serializers by default.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="goals",
+        help_text="Owner of this goal.",
+    )
     title = models.CharField(max_length=255, help_text="Short label for this goal.")
-    target_projects = models.IntegerField(help_text="Number of projects to complete.")
-    deadline = models.DateField(help_text="Target deadline.")
-    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
-    total_steps = models.PositiveIntegerField(default=0, help_text="Total checklist steps (optional).")
-    completed_steps = models.PositiveIntegerField(default=0, help_text="Completed checklist steps (optional).")
+
+    # Keep IntegerField (positivity still enforced by clean()) to avoid risky data migration.
+    # If you want a stricter field type later, we can switch to PositiveIntegerField in a follow-up.
+    target_projects = models.IntegerField(
+        verbose_name="Target number of projects to build",
+        help_text="Number of projects to complete (must be ≥ 1).",
+    )
+
+    deadline = models.DateField(
+        help_text="Target deadline."
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Creation timestamp.",
+    )
+
+    total_steps = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Overall required steps",
+        help_text="Total checklist steps (optional).",
+    )
+
+    completed_steps = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Accomplished steps",
+        help_text="Completed checklist steps (optional).",
+    )
 
     class Meta:
         ordering = ["deadline"]
@@ -388,16 +423,23 @@ class Goal(models.Model):
     def clean(self):
         from datetime import date as _date
         errors = {}
+
+        # Must be positive
         if self.target_projects is None or self.target_projects <= 0:
             errors["target_projects"] = "target_projects must be a positive integer."
+
+        # Future-only deadline
         if self.deadline and self.deadline < _date.today():
             errors["deadline"] = "deadline cannot be in the past."
+
+        # Normalize step counters and keep consistency
         if self.total_steps is None or self.total_steps < 0:
             self.total_steps = 0
         if self.completed_steps is None or self.completed_steps < 0:
             self.completed_steps = 0
         if self.completed_steps > self.total_steps:
             self.completed_steps = self.total_steps
+
         if errors:
             raise ValidationError(errors)
 
