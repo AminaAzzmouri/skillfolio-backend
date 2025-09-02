@@ -29,8 +29,6 @@ from users import views  # resource ViewSets + analytics
 from django.conf import settings
 from django.conf.urls.static import static
 
-# import os
-
 # Auth endpoints (centralized)
 from users.auth_views import (
     EmailTokenObtainPairView,
@@ -46,9 +44,9 @@ from django.shortcuts import redirect
 # DRF Routers (ViewSets → automatic CRUD endpoints)
 # -----------------------------------------------------------------------------
 router = routers.DefaultRouter()
-router.register(r"certificates", views.CertificateViewSet)
-router.register(r"projects", views.ProjectViewSet)
-router.register(r"goals", views.GoalViewSet)
+router.register(r"certificates", views.CertificateViewSet, basename="certificate")
+router.register(r"projects", views.ProjectViewSet, basename="project")
+router.register(r"goals", views.GoalViewSet, basename="goal")
 router.register(r"goalsteps", views.GoalStepViewSet, basename="goalstep")  # NEW
 
 # -----------------------------------------------------------------------------
@@ -83,8 +81,9 @@ schema_view = get_schema_view(
 # URL Patterns
 # -----------------------------------------------------------------------------
 urlpatterns = [
-    # tiny root view that redirects to Swagger
-    path("", lambda r: redirect("api-docs-swagger"), name="root-redirect"),
+    
+    # tiny root view that redirects to the FE (configurable per env)
+    path("", lambda r: redirect(settings.FRONTEND_URL), name="root-redirect"),
 
     path("admin/", admin.site.urls),
 
@@ -92,10 +91,9 @@ urlpatterns = [
     path("api/", include(router.urls)),
 
     # Auth (JWT)
+    path("api/auth/register/", register,                          name="register"),
     path("api/auth/login/",   EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshTaggedView.as_view(),   name="auth_refresh_create"),
-
-    path("api/auth/register/", register,                          name="register"),
     path("api/auth/logout/",  jwt_logout,                         name="logout"),
 
     # Analytics
@@ -110,8 +108,3 @@ urlpatterns = [
 # Dev-only media serving (uploads in /media/)
 if settings.DEBUG:
      urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-
-# if settings.DEBUG or os.environ.get("ENABLE_MEDIA_SERVE") == "1":
-    # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-# ==> Serve /media/ in prod for now so “View file” links work: the media block is now always serve when an env flag is set
