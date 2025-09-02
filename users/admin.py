@@ -57,9 +57,12 @@ NEW (admin behavior improvements)
   adding “=id” to CertificateAdmin.search_fields).
 
 - NEW (inline → full add flow for Projects):
-  * ProjectInline is now **view-only** (no inline add). This avoids half-filled
-    rows and encourages complete project metadata.
-  * The Certificate change page shows a prominent **“Add project for this
+  * ProjectInline is now **view-only** (no inline add **and** no inline edit/delete).
+  * On the Certificate change page we render each linked Project as:
+        [Title]  |  [Change]
+    where **Change** links to the Project edit page with a `?next=` back to the
+    certificate page. This avoids redundancy (no partial inline editing).
+  * The Certificate change page also shows a prominent **“Add project for this
     certificate”** action. It opens the full Project **Add** form with the
     certificate pre-selected and returns to the certificate page after save.
 
@@ -102,11 +105,29 @@ NEW (admin behavior improvements)
     the related-field wrapper flags: can_add_related=False, can_change_related=False,
     can_delete_related=False, can_view_related=False.
 
+- NEW (Project save redirect rules)
+  * If a Project form URL includes `?next=/admin/users/certificate/<id>/change/`,
+    then after **Save** we return to that certificate page (works for both Add and Change).
+  * Otherwise (i.e., you came from the Projects list), **Save** returns you to the
+    Projects changelist. “Save and continue” and “Save and add another” keep default behavior.
+
+- NEW (Certificate form UI parity)
+  * The Certificate form loads `users/admin/certificate_form_ui.js` which:
+      - switches **Date earned** to the native **in-input** calendar,
+      - hides Django’s “datetimeshortcuts” box,
+      - clamps to **today** (`max=today`) and **greys out future days** in the popup,
+      - shows the same **error-banner** behavior as Projects,
+      - adds **per-field Reset** links (Title, Issuer, Date earned, File upload)
+        and a **Reset all** button.
+    Admin code below simply loads the assets and removes the static help so the
+    JS can render a single dynamic helper under the field.
+
 Notes
 ===============================================================================
 - The per-field “Reset” links and “Reset all” button are purely client-side and
-  live in users/static/users/admin/project_end_date_toggle.js. Admin code here
-  simply ensures the Project form layout/fields cooperate with that behavior.
+  live in users/static/users/admin/project_end_date_toggle.js (Projects) and
+  users/static/users/admin/certificate_form_ui.js (Certificates). Admin code here
+  ensures the forms cooperate with that behavior.
 """
 
 from django.contrib import admin
@@ -125,31 +146,46 @@ from .models import Certificate, Project, Goal, GoalStep
 # -----------------------------------------------------------------------------
 class ProjectInline(admin.TabularInline):
     """
-    Inline Projects under a Certificate.
+    View-only inline of Projects under a Certificate.
 
-    Why fields are arranged this way:
-    - 'date_created' and 'duration_text' are included in 'fields' AND in
-      'readonly_fields' so they show up but cannot be edited.
+    Rendered columns:
+      - title (read-only)
+      - change_link (custom action that adds ?next=<back to this certificate>)
 
-    NEW:
-    - This inline is now **view-only**: we disable the ability to add inline
-      rows so that users use the full Project Add form via the CTA on the
-      Certificate page (pre-fills certificate and redirects back on save).
+    We also disable add/delete inline actions entirely.
     """
     model = Project
     fk_name = "certificate"
     extra = 0
-    show_change_link = True
-
-    fields = ("title", "status", "work_type", "start_date", "end_date", "duration_text", "date_created")
-    readonly_fields = ("date_created", "duration_text")
+    can_delete = False
+    show_change_link = False  # we provide our own Change link with ?next=
+    fields = ("title", "change_link")
+    readonly_fields = ("title", "change_link")
 
     def has_add_permission(self, request, obj=None):
         return False
 
+    def has_change_permission(self, request, obj=None):
+        # Inline rows are purely view-only; editing happens in the full Project form.
+        return False
+
+    def change_link(self, obj):
+        if not obj.pk:
+            return "—"
+        change_url = reverse("admin:users_project_change", args=[obj.pk])
+        back_url = reverse("admin:users_certificate_change", args=[obj.certificate_id])
+        link = f"{change_url}?{urlencode({'next': back_url})}"
+        return mark_safe(f'<a class="button" href="{link}">Change</a>')
+    change_link.short_description = "Actions"
+
 
 @admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
+    # Load certificate-specific JS and reuse the shared CSS (notes + calendar greying).
+    class Media:
+        js = ("users/admin/certificate_form_ui.js",)
+        css = {"all": ("users/admin/project_end_date_toggle.css",)}
+
     list_display = ("title", "issuer", "date_earned", "project_count", "file_upload")
     list_filter = ("issuer", "date_earned")
     search_fields = ("title", "issuer", "user__username", "user__email", "=id")
@@ -164,6 +200,16 @@ class CertificateAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         return ("user", "add_project_cta") if obj else ()
+
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Remove the static help on 'date_earned' so the JS can render a single,
+        status-agnostic helper under the field (and avoid duplicate messages).
+        """
+        form = super().get_form(request, obj, **kwargs)
+        if "date_earned" in form.base_fields:
+            form.base_fields["date_earned"].help_text = ""
+        return form
 
     def add_project_cta(self, obj):
         """Button to open the full Project add form pre-filtered to this certificate."""
@@ -196,7 +242,7 @@ class CertificateAdmin(admin.ModelAdmin):
     def save_formset(self, request, form, formset, change):
         """
         Keep inline projects consistent with their parent certificate.
-        (Inline is read-only now, but we keep this for safety/back-compat.)
+        (Inline is view-only now, but we keep this for safety/back-compat.)
         """
         instances = formset.save(commit=False)
         parent_cert = form.instance
@@ -227,6 +273,12 @@ class ProjectAdmin(admin.ModelAdmin):
       This prevents accidental certificate edits from the project context.
     - The date fields’ UX (lock/unlock, min/max, helper text, reset links, error banner)
       is implemented in the static JS/CSS declared in Media below.
+
+    Redirect behavior:
+    - If the Project form URL includes ?next=<url>, after Save we redirect to that URL.
+      (Used by the Certificate inline “Change” link and the “Add project for this certificate” CTA.)
+    - Otherwise, Save returns to the Projects list (changelist).
+    - “Save and continue” / “Save and add another” keep default Django behavior.
     """
     list_display = ("title", "user", "certificate_link", "status", "work_type", "duration_text", "description_short")
     autocomplete_fields = ("certificate",)
@@ -369,6 +421,23 @@ class ProjectAdmin(admin.ModelAdmin):
         if next_url:
             return HttpResponseRedirect(next_url)
         return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        """
+        Respect ?next= on change (edit) saves. Otherwise, return to the Projects list
+        for a plain “Save”. “Save and continue” / “Save and add another” keep defaults.
+        """
+        # Keep Django defaults for these buttons:
+        if "_continue" in request.POST or "_saveasnew" in request.POST or "_addanother" in request.POST:
+            return super().response_change(request, obj)
+
+        # If a ?next= is present, prefer it.
+        next_url = request.GET.get("next")
+        if next_url:
+            return HttpResponseRedirect(next_url)
+
+        # Default: return to Projects changelist.
+        return HttpResponseRedirect(reverse("admin:users_project_changelist"))
 
 
 # -----------------------------------------------------------------------------
