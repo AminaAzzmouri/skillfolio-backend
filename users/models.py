@@ -50,10 +50,11 @@ NEW
 ===============================================================================
 - Validation:
     • start_date is **required** for all statuses.
-    • Planned: start_date must be **today or future**.
-    • In Progress / Completed: start_date must be **today or past**.
-    • Completed: end_date is **required**, must be **strictly after** start_date,
-      and **cannot be in the future**.
+    • Planned:     start_date must be **today or future**.
+    • In Progress: start_date must be **today or past**.
+    • Completed:   start_date must be **yesterday or earlier** (strictly before today),
+                   end_date is **required**, must be **strictly after** start_date,
+                   and **cannot be in the future**.
     • Non-completed: end_date must be empty (we also clear it in save()).
 - Description: opening sentence adapts to status:
     • Completed  → “... was a … completed in <duration>.”
@@ -66,7 +67,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
-from datetime import date
+from datetime import date, timedelta
 
 
 def validate_file_size_5mb(f):
@@ -125,7 +126,7 @@ class Project(models.Model):
     # Dates
     start_date = models.DateField(
         null=True, blank=True, verbose_name="Start date",
-        help_text="Required. Planned: today or future; In progress/Completed: today or past."
+        help_text="Required. Planned: today or future; In progress: today or past; Completed: yesterday or earlier."
     )
     end_date   = models.DateField(
         null=True, blank=True, verbose_name="End date",
@@ -211,24 +212,28 @@ class Project(models.Model):
         - start_date is required for all statuses.
         - Planned:     start_date >= today.
         - In Progress: start_date <= today.
-        - Completed:   start_date <= today, end_date is required,
+        - Completed:   start_date <= yesterday (strictly before today), end_date is required,
                        end_date > start_date, end_date <= today.
         - Non-completed: end_date must be empty.
         """
         errors = {}
         today = date.today()
+        yesterday = today - timedelta(days=1)
 
         # start_date required always
         if not self.start_date:
             # single friendly message to avoid duplicate form+model errors
             errors["start_date"] = "The project must have a start date"
 
-        # Status-based start rules
+        # Status-based start rules (only if a date is provided)
         if self.start_date:
             if self.status == self.STATUS_PLANNED and self.start_date < today:
                 errors["start_date"] = "For planned projects, Start date must be today or in the future."
-            if self.status in (self.STATUS_IN_PROGRESS, self.STATUS_COMPLETED) and self.start_date > today:
-                errors["start_date"] = "Start date cannot be in the future for in-progress or completed projects."
+            elif self.status == self.STATUS_IN_PROGRESS and self.start_date > today:
+                errors["start_date"] = "Start date cannot be in the future for in-progress projects."
+            elif self.status == self.STATUS_COMPLETED and self.start_date > yesterday:
+                # i.e., today or future is invalid for completed
+                errors["start_date"] = "For completed projects, Start date must be before today."
 
         # End date rules
         if self.status == self.STATUS_COMPLETED:
@@ -260,7 +265,7 @@ class Project(models.Model):
 
         bits = []
 
-        # COMPLETED → keep your original (past tense) style
+        # COMPLETED → past tense
         if self.status == self.STATUS_COMPLETED:
             dur = self.duration_human.strip() if self.duration_human else None
             if role_word and dur:
@@ -330,7 +335,6 @@ class Project(models.Model):
             return " ".join(bits).strip()
 
         # PLANNED → present/future tense
-        # prefer “planned … starting on <date>”
         if role_word and self.start_date:
             bits.append(f"{opening} is a planned {role_word} project starting on {self.start_date.isoformat()}.")
         elif role_word:
@@ -351,9 +355,7 @@ class Project(models.Model):
 
         if self.tools_used:
             bits.append(f"The tools I’m willing to use are: {self.tools_used.strip()}.")
-        # We intentionally omit skills/challenges/problem in Planned
         if self.skills_to_improve:
-            # Optional to mention future focus even in planned
             bits.append(f"I plan to improve: {self.skills_to_improve.strip()}.")
 
         return " ".join(bits).strip()
@@ -468,5 +470,3 @@ class GoalStep(models.Model):
         total = GoalStep.objects.filter(goal_id=gid).count()
         done = GoalStep.objects.filter(goal_id=gid, is_done=True).count()
         Goal.objects.filter(pk=gid).update(total_steps=total, completed_steps=done)
-
-
