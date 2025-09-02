@@ -92,6 +92,15 @@ NEW (admin behavior improvements)
   * To avoid duplicate errors (“This field is required.” + model error), the Start
     date is **not required** at the form level; the model clean() raises the single
     friendly error: “The project must have a start date”.
+
+- NEW (Project form — Certificate FK limited to linking only)
+  * On Project **add/edit** pages, the Certificate field is **link-only**:
+    no “add”, “edit/change”, “delete”, or “view” icons are rendered next to it.
+    This keeps all certificate management in the Certificates admin, while still
+    allowing you to **select** a certificate (and clear it with the per-field Reset
+    link provided by the JS). Implementation: we patch the admin’s related-field
+    widget to disable `can_add_related`, `can_change_related`, `can_delete_related`,
+    and `can_view_related` for that field.
 """
 
 from django.contrib import admin
@@ -100,6 +109,7 @@ from django.utils.safestring import mark_safe
 from django.urls import reverse
 from urllib.parse import urlencode
 from django.http import HttpResponseRedirect
+from django.contrib.admin.widgets import RelatedFieldWidgetWrapper  # for FK widget flags
 
 from .models import Certificate, Project, Goal, GoalStep
 
@@ -252,6 +262,16 @@ class ProjectAdmin(admin.ModelAdmin):
             ed.required = False
             ed.help_text = ""   # dynamic help via JS
 
+        # Certificate FK: link-only — hide add/change/delete/view icons next to the widget
+        if "certificate" in form.base_fields:
+            w = form.base_fields["certificate"].widget
+            # When using autocomplete_fields, Django wraps the widget in RelatedFieldWidgetWrapper.
+            # We toggle the wrapper flags off to remove all related-object action icons.
+            if isinstance(w, RelatedFieldWidgetWrapper) or hasattr(w, "can_add_related"):
+                for attr in ("can_add_related", "can_change_related", "can_delete_related", "can_view_related"):
+                    if hasattr(w, attr):
+                        setattr(w, attr, False)
+
         return form
 
     def description_short(self, obj):
@@ -350,5 +370,3 @@ class GoalAdmin(admin.ModelAdmin):
         "created_at",
     )
     readonly_fields = ("created_at",)
-
-
