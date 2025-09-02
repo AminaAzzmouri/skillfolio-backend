@@ -255,7 +255,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-os.makedirs(MEDIA_ROOT, exist_ok=True)
+#os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -288,7 +288,7 @@ if USE_S3:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
 
 
-# Preview errors with file upload on Renders.logs
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
