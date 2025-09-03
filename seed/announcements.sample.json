@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Machine Learning Specialization — Spring intake",
+    "platform": "Coursera",
+    "type": "enrollment",
+    "url": "https://www.coursera.org/specializations/machine-learning-introduction",
+    "starts_at": "2025-03-01",
+    "ends_at": "2025-03-31",
+    "tags": ["AI", "Beginner"]
+  },
+  {
+    "title": "Modern JavaScript Bootcamp — 50% OFF",
+    "platform": "Udemy",
+    "type": "discount",
+    "url": "https://www.udemy.com/courses/search/?q=modern%20javascript",
+    "starts_at": "2025-03-05",
+    "ends_at": "2025-03-12",
+    "discount_pct": 50,
+    "price_original": 79.99,
+    "price_current": 39.99,
+    "tags": ["JavaScript", "Web"]
+  },
+  {
+    "title": "Data Science MicroMasters — Spring enrollment",
+    "platform": "edX",
+    "type": "enrollment",
+    "url": "https://www.edx.org/search?q=data%20science%20micromasters",
+    "starts_at": "2025-03-10",
+    "ends_at": "2025-04-10",
+    "tags": ["Data", "Intermediate"]
+  }
+]
