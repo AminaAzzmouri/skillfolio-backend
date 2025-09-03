@@ -2,7 +2,7 @@
 @base = https://skillfolio-backend.onrender.com
 
 
-### @base = http://127.0.0.1:8000
+###@base = http://127.0.0.1:8000
 
 
 
@@ -16,7 +16,7 @@ POST {{base}}/api/auth/register/
 Content-Type: application/json
 
 {
-  "email": "Hana@example.com",
+  "email": "bibi@example.com",
   "password": "Test1234"
 }
 
@@ -26,8 +26,8 @@ POST {{base}}/api/auth/login/
 Content-Type: application/json
 
 {
-  "email_or_username": "hana@example.com",
-  "password": "Test1234"
+  "email_or_username": "bibi@example.com",
+  "password": "string"
 }
 
 ### Login with derived username (copy it from register response if you want)
@@ -35,7 +35,10 @@ Content-Type: application/json
 POST {{base}}/api/auth/login/
 Content-Type: application/json
 
-{ "email_or_username": "hana", "password": "Test1234" }
+{ 
+  "email_or_username": "bibi", 
+  "password": "string" 
+}
 
 ### Refresh (uses refresh from the 'login' request)
 # @name refresh1

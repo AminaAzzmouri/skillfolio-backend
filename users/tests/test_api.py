@@ -55,7 +55,7 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.client = APIClient()
         r = self.client.post(
             "/api/auth/login/",
-            {"username": "me@example.com", "password": "pass1234"},
+            {"email_or_username": "me@example.com", "password": "pass1234"},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
@@ -65,7 +65,7 @@ class SkillfolioAPISmokeTests(APITestCase):
 
     def auth_client(self, username, password):
         c = APIClient()
-        r = c.post("/api/auth/login/", {"username": username, "password": password}, format="json")
+        r = c.post("/api/auth/login/", {"email_or_username": username, "password": password}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         c.credentials(HTTP_AUTHORIZATION=f"Bearer {r.data['access']}")
         return c, r.data
@@ -147,14 +147,14 @@ class SkillfolioAPISmokeTests(APITestCase):
 
         # Login with email
         c = APIClient()
-        r2 = c.post("/api/auth/login/", {"email": email, "password": "abcd1234"}, format="json")
+        r2 = c.post("/api/auth/login/", {"email_or_username": email, "password": "abcd1234"}, format="json")
         self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
         self.assertIn("access", r2.data)
         self.assertIn("refresh", r2.data)
 
         # Login with derived username (should also work)
         r3 = c.post(
-            "/api/auth/login/", {"username": derived_username, "password": "abcd1234"}, format="json"
+            "/api/auth/login/", {"email_or_username": derived_username, "password": "abcd1234"}, format="json"
         )
         self.assertEqual(r3.status_code, status.HTTP_200_OK, r3.data)
         self.assertIn("access", r3.data)
