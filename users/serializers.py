@@ -36,6 +36,9 @@ from rest_framework import serializers
 
 from .models import Certificate, Project, Goal, GoalStep, Project as ProjectModel
 
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 
 # --------------------------------------------------------------------------- #
 # Small helpers                                                               #
@@ -63,7 +66,49 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=4)
 
+# --------------------------------------------------------------------------- #
+# Login payload                                                            #
+# --------------------------------------------------------------------------- #
 
+User = get_user_model()
+
+class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Accepts identifier (email or username). Also tolerates 'email' or 'username'
+    inputs for backward-compat. Maps to the serializer's username_field before
+    calling the parent validator.
+    """
+
+    def validate(self, attrs):
+        # Read from identifier first, then fall back to username/email
+        identifier = (
+            self.initial_data.get("email_or_username")
+            or self.initial_data.get("identifier")
+            or self.initial_data.get("username")
+            or self.initial_data.get("email")
+            or ""
+            ).strip()
+
+        # Always pass a 'password' through to parent
+        password = self.initial_data.get("password")
+        if password is not None:
+            attrs["password"] = password
+
+        # Map identifier -> the username field expected by SimpleJWT
+        # If identifier looks like an email, resolve the user's username.
+        if identifier:
+            if "@" in identifier:
+                try:
+                    u = User.objects.get(email__iexact=identifier)
+                    attrs[self.username_field] = getattr(u, self.username_field)
+                except User.DoesNotExist:
+                    # Fall back to raw identifier in case your username == email
+                    attrs[self.username_field] = identifier
+            else:
+                attrs[self.username_field] = identifier
+
+        return super().validate(attrs)
+    
 # --------------------------------------------------------------------------- #
 # Certificate                                                                 #
 # --------------------------------------------------------------------------- #

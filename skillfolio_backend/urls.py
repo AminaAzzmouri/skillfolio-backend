@@ -40,6 +40,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from django.shortcuts import redirect
 
+
 # -----------------------------------------------------------------------------
 # DRF Routers (ViewSets → automatic CRUD endpoints)
 # -----------------------------------------------------------------------------

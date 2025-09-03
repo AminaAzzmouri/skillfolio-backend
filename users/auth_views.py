@@ -41,12 +41,17 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView as _TokenRefreshView,
 )
+
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 # Swagger / OpenAPI
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+
+from rest_framework.permissions import AllowAny
+from .serializers import EmailOrUsernameTokenObtainPairSerializer
+
 
 # Common response schemas for docs
 TOKENS_PAIR_SCHEMA = openapi.Schema(
@@ -63,58 +68,6 @@ ACCESS_ONLY_SCHEMA = openapi.Schema(
         # May also include 'refresh' if ROTATE_REFRESH_TOKENS=True (not required).
     },
 )
-
-# ---------------------------------------------------------------------------
-# Flexible login with TWO FIELDS in docs: email_or_username + password
-# ---------------------------------------------------------------------------
-class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    API accepts **either** a full email **or** a short username via 'email_or_username',
-    plus 'password'. For backward-compatibility we also accept 'username', 'email', or 'login'.
-    """
-    # New single input field:
-    email_or_username = serializers.CharField(write_only=True, required=False)
-
-    # Back-compat aliases (won't show as required in docs):
-    username = serializers.CharField(required=False)
-    email = serializers.EmailField(write_only=True, required=False)
-    login = serializers.CharField(write_only=True, required=False)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # We drive auth via our own field; don't force 'username'
-        self.fields["username"].required = False
-
-    def validate(self, attrs):
-        User = get_user_model()
-
-        # Prefer the new single field, then fall back to older ones
-        identifier = (
-            (attrs.pop("email_or_username", "") or "").strip()
-            or (attrs.pop("login", "") or "").strip()
-            or (attrs.pop("email", "") or "").strip()
-            or (attrs.get("username") or "").strip()
-        )
-
-        if not identifier:
-            raise serializers.ValidationError(
-                {"detail": "Provide 'email_or_username' (email or username) and 'password'."}
-            )
-
-        # If identifier looks like an email, resolve it to the actual username
-        if "@" in identifier:
-            try:
-                user = User.objects.get(email__iexact=identifier)
-                attrs["username"] = user.get_username()
-            except User.DoesNotExist:
-                # Let parent class produce its standard invalid-credentials error
-                attrs["username"] = identifier
-        else:
-            # Plain username path
-            attrs["username"] = identifier
-
-        return super().validate(attrs)
-
 
 # ---- Swagger request body for login (TWO FIELDS ONLY) ----------------------
 class LoginDocSerializer(serializers.Serializer):
