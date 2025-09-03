@@ -78,6 +78,11 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
     inputs for backward-compat. Maps to the serializer's username_field before
     calling the parent validator.
     """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Crucial: don't require 'username' so DRF won't 400 before our validate() runs
+        self.fields[self.username_field].required = False
 
     def validate(self, attrs):
         # Read from identifier first, then fall back to username/email

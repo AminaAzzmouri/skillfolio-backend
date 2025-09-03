@@ -93,7 +93,7 @@ urlpatterns = [
 
     # Auth (JWT)
     path("api/auth/register/", register,                          name="register"),
-    path("api/auth/login/",   EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/login/", EmailTokenObtainPairView.as_view(), name="auth_login"),
     path("api/auth/refresh/", TokenRefreshTaggedView.as_view(),   name="auth_refresh_create"),
     path("api/auth/logout/",  jwt_logout,                         name="logout"),
 
