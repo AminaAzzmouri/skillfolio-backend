@@ -25,6 +25,11 @@ from .models import Announcement, Fact
 from .serializers import AnnouncementSerializer, FactSerializer
 
 
+from urllib.parse import quote_plus
+from .platforms import PLATFORMS
+
+
+
 class AnnouncementFilter(dj_filters.FilterSet):
     platform = dj_filters.CharFilter(field_name="platform", lookup_expr="iexact")
     type = dj_filters.CharFilter(field_name="type", lookup_expr="iexact")
@@ -68,3 +73,25 @@ class RandomFactView(APIView):
         if not fact:
             return Response({"detail": "No active facts available."}, status=404)
         return Response(FactSerializer(fact).data)
+
+class PlatformSearchView(APIView):
+    """
+    GET /api/platforms/?q=machine learning
+    Returns platform list with direct search links for the given query.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        out = []
+        for p in PLATFORMS:
+            search_url = p["home"]
+            if q:
+                search_url = p["search"].format(q=quote_plus(q))
+            out.append({
+                "name": p["name"],
+                "category": p.get("category", ""),
+                "home": p["home"],
+                "search_url": search_url,
+            })
+        return Response({"query": q, "platforms": out})

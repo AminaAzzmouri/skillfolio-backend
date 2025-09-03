@@ -1,0 +1,17 @@
+PLATFORMS = [
+    {"name": "Class Central", "home": "https://www.classcentral.com/", "search": "https://www.classcentral.com/search?q={q}", "category": "Aggregator"},
+    {"name": "Coursera", "home": "https://www.coursera.org/", "search": "https://www.coursera.org/search?query={q}", "category": "MOOC"},
+    {"name": "edX", "home": "https://www.edx.org/", "search": "https://www.edx.org/search?q={q}", "category": "MOOC"},
+    {"name": "Udemy", "home": "https://www.udemy.com/", "search": "https://www.udemy.com/courses/search/?q={q}", "category": "Marketplace"},
+    {"name": "Udacity", "home": "https://www.udacity.com/", "search": "https://www.udacity.com/courses/all?search={q}", "category": "MOOC"},
+    {"name": "FutureLearn", "home": "https://www.futurelearn.com/", "search": "https://www.futurelearn.com/courses?query={q}", "category": "MOOC"},
+    {"name": "Pluralsight", "home": "https://www.pluralsight.com/", "search": "https://www.pluralsight.com/search?q={q}", "category": "Tech"},
+    {"name": "Codecademy", "home": "https://www.codecademy.com/", "search": "https://www.codecademy.com/search?query={q}", "category": "Tech"},
+    {"name": "Khan Academy", "home": "https://www.khanacademy.org/", "search": "https://www.khanacademy.org/search?page_search_query={q}", "category": "Free"},
+    {"name": "LinkedIn Learning", "home": "https://www.linkedin.com/learning/", "search": "https://www.linkedin.com/learning/search?keywords={q}", "category": "Pro"},
+    {"name": "Skillshare", "home": "https://www.skillshare.com/", "search": "https://www.skillshare.com/search?query={q}", "category": "Marketplace"},
+    {"name": "DataCamp", "home": "https://www.datacamp.com/", "search": "https://www.datacamp.com/search?q={q}", "category": "Data"},
+    {"name": "Google Cloud Skills Boost", "home": "https://www.cloudskillsboost.google/", "search": "https://www.cloudskillsboost.google/catalog?search={q}", "category": "Vendor"},
+    {"name": "Microsoft Learn", "home": "https://learn.microsoft.com/", "search": "https://learn.microsoft.com/search/?terms={q}", "category": "Vendor"},
+    {"name": "AWS Training", "home": "https://www.aws.training/", "search": "https://www.aws.training/Details/Curriculum?id=20685#?phrase={q}", "category": "Vendor"},
+]
