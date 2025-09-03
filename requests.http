@@ -21,7 +21,7 @@ Content-Type: application/json
 }
 
 ### Login (TWO FIELDS) — type either full email OR bare username
-# @name login
+# @name loginEmail
 POST {{base}}/api/auth/login/
 Content-Type: application/json
 
@@ -30,23 +30,30 @@ Content-Type: application/json
   "password": "Test1234"
 }
 
+### Login with derived username (copy it from register response if you want)
+# @name loginUser
+POST {{base}}/api/auth/login/
+Content-Type: application/json
+
+{ "email_or_username": "hana", "password": "Test1234" }
+
 ### Refresh (uses refresh from the 'login' request)
 # @name refresh1
 POST {{base}}/api/auth/refresh/
 Content-Type: application/json
 
 {
-  "refresh": "{{login.response.body.refresh}}"
+  "refresh": "{{loginEmail.response.body.refresh}}"
 }
 
 ### Logout (blacklist the refresh)
 # @name logout1
 POST {{base}}/api/auth/logout/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
-  "refresh": "{{login.response.body.refresh}}"
+  "refresh": "{{loginEmail.response.body.refresh}}"
 }
 
 ### Refresh again (should fail after logout)
@@ -54,7 +61,7 @@ POST {{base}}/api/auth/refresh/
 Content-Type: application/json
 
 {
-  "refresh": "{{login.response.body.refresh}}"
+  "refresh": "{{loginEmail.response.body.refresh}}"
 }
 
 # =========================================================
@@ -64,7 +71,7 @@ Content-Type: application/json
 ### Create certificate (JSON)
 # @name cert1
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -76,7 +83,7 @@ Content-Type: application/json
 ### Create certificate (JSON)
 # @name cert2
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -88,7 +95,7 @@ Content-Type: application/json
 ### Create certificate (JSON)
 # @name cert3
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -100,7 +107,7 @@ Content-Type: application/json
 ### Create certificate (JSON)
 # @name cert4
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -112,7 +119,7 @@ Content-Type: application/json
 ### Create certificate (multipart + file)
 # @name cert_file1
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: multipart/form-data; boundary=sfBoundary
 
 --sfBoundary
@@ -136,7 +143,7 @@ Content-Type: image/png
 
 ### Big file error case (expect validation error)
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: multipart/form-data; boundary=sfBoundary
 
 --sfBoundary
@@ -160,7 +167,7 @@ Content-Type: application/pdf
 
 ### Future date should fail
 POST {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -171,15 +178,15 @@ Content-Type: application/json
 
 ### List certificates (newest first)
 GET {{base}}/api/certificates/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Filter by Id (use cert1)
 GET {{base}}/api/certificates/?id={{cert1.response.body.id}}
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### PATCH certificate (cert2)
 PATCH {{base}}/api/certificates/{{cert2.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -188,7 +195,7 @@ Content-Type: application/json
 
 ### PUT certificate (cert3)
 PUT {{base}}/api/certificates/{{cert3.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -199,7 +206,7 @@ Content-Type: application/json
 
 ### DELETE a certificate (cert4)
 DELETE {{base}}/api/certificates/{{cert4.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 # =========================================================
 # PROJECTS
@@ -208,7 +215,7 @@ Authorization: Bearer {{login.response.body.access}}
 ### Create a completed project linked to cert1
 # @name proj1
 POST {{base}}/api/projects/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -225,7 +232,7 @@ Content-Type: application/json
 ### Create a planned project (no certificate)
 # @name proj2
 POST {{base}}/api/projects/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -239,19 +246,19 @@ Content-Type: application/json
 
 ### List projects (newest first)
 GET {{base}}/api/projects/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Filter by certificate via alias (?certificateId=)
 GET {{base}}/api/projects/?certificateId={{cert1.response.body.id}}
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Search by description content (URL encoded)
 GET {{base}}/api/projects/?search=Initial%20draft
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### PATCH project (proj1 -> in_progress)
 PATCH {{base}}/api/projects/{{proj1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -260,7 +267,7 @@ Content-Type: application/json
 
 ### Unlink certificate from proj1
 PATCH {{base}}/api/projects/{{proj1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -269,7 +276,7 @@ Content-Type: application/json
 
 ### DELETE proj1
 DELETE {{base}}/api/projects/{{proj1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 # =========================================================
 # GOALS & STEPS
@@ -278,7 +285,7 @@ Authorization: Bearer {{login.response.body.access}}
 ### Create a goal
 # @name goal1
 POST {{base}}/api/goals/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -291,12 +298,12 @@ Content-Type: application/json
 
 ### List goals
 GET {{base}}/api/goals/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Create goal step (ordered)
 # @name step1
 POST {{base}}/api/goalsteps/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -308,7 +315,7 @@ Content-Type: application/json
 ### Create goal step (unordered)
 # @name step2
 POST {{base}}/api/goalsteps/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -318,7 +325,7 @@ Content-Type: application/json
 
 ### Toggle step2 as done
 PATCH {{base}}/api/goalsteps/{{step2.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -327,7 +334,7 @@ Content-Type: application/json
 
 ### Reorder step2
 PATCH {{base}}/api/goalsteps/{{step2.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -336,11 +343,11 @@ Content-Type: application/json
 
 ### Delete step1
 DELETE {{base}}/api/goalsteps/{{step1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Update goal (target change)
 PATCH {{base}}/api/goals/{{goal1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -349,11 +356,11 @@ Content-Type: application/json
 
 ### Delete goal
 DELETE {{base}}/api/goals/{{goal1.response.body.id}}/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Invalid goal (negative target)
 POST {{base}}/api/goals/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -364,7 +371,7 @@ Content-Type: application/json
 
 ### Past-deadline goal (should fail)
 POST {{base}}/api/goals/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 Content-Type: application/json
 
 {
@@ -379,11 +386,11 @@ Content-Type: application/json
 
 ### Summary Count
 GET {{base}}/api/analytics/summary/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Goals with progress
 GET {{base}}/api/analytics/goals-progress/
-Authorization: Bearer {{login.response.body.access}}
+Authorization: Bearer {{loginEmail.response.body.access}}
 
 ### Swagger UI
 GET {{base}}/api/docs/
