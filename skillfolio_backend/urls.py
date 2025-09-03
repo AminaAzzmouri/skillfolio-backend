@@ -40,6 +40,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from django.shortcuts import redirect
 
+from django.urls import path, include
+
 
 # -----------------------------------------------------------------------------
 # DRF Routers (ViewSets → automatic CRUD endpoints)
@@ -104,6 +106,8 @@ urlpatterns = [
     # API docs
     path("api/docs/",   schema_view.with_ui("swagger", cache_timeout=0), name="api-docs-swagger"),
     path("api/schema/", schema_view.without_ui(cache_timeout=0),         name="openapi-schema"),
+    
+    path("api/", include("announcements.urls", namespace="announcements")),
 ]
 
 # Dev-only media serving (uploads in /media/)

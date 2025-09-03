@@ -66,6 +66,7 @@ from pathlib import Path
 from datetime import timedelta
 from urllib.parse import urlparse
 import os
+import sys
 
 
 # ---------------------------
@@ -163,6 +164,7 @@ INSTALLED_APPS = [
 
     # Local apps
     'users',
+    'announcements',
 ]
 
 SWAGGER_SETTINGS = {
@@ -213,6 +215,11 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [ "rest_framework.throttling.AnonRateThrottle" ],
     "DEFAULT_THROTTLE_RATES": {"anon": "10/min"},
 }
+
+# Disable throtting when running tests
+if "test" in sys.argv:
+    REST_FRAMEWORK[ "DEFAULT_THROTTLE_CLASSES"] = []
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {}
 
 # JWT lifetimes (dev-friendly defaults)
 SIMPLE_JWT = {

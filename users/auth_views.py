@@ -214,6 +214,6 @@ def logout(request):
         except TokenError:
              return Response({"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST)
          
-        # No body for 204
+        # No body for 204 = success
         return Response(status=status.HTTP_204_NO_CONTENT)
        

@@ -1029,3 +1029,29 @@ python-3.11.9
 ### Why this matters
 
 - Prevents build errors with C extensions (e.g., psycopg2-binary) and keeps CI/prod consistent.
+
+---
+
+## Announcements & Facts API
+
+- This app powers the Home page feed and the “Did you know?” card.
+
+### Endpoints
+
+- `GET /api/announcements/` *(auth required)*
+  - Filters: `platform=Coursera`, `type=enrollment|discount`,
+    `starts_at_after=YYYY-MM-DD`, `ends_at_before=YYYY-MM-DD`
+  - Search: `?search=javascript` (title/platform/tags)
+  - Ordering: `?ordering=-starts_at` (default)
+- `GET /api/facts/random/` *(public)* — returns one random active fact.
+
+### Quick start
+
+            python manage.py makemigrations announcements
+            python manage.py migrate
+
+# optional: add a few rows in admin
+
+            python manage.py createsuperuser
+            
+# then /admin, add Announcement and Fact entries
