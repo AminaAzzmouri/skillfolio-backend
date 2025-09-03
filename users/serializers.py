@@ -112,7 +112,16 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
             else:
                 attrs[self.username_field] = identifier
 
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        # Extend response to FE can show username right after login
+        user = self.user
+        data.update(
+            {
+            "username":getattr(user,"username",""),
+            "email":getattr(user,"email","")
+            }
+            )
+        return data
     
 # --------------------------------------------------------------------------- #
 # Certificate                                                                 #
