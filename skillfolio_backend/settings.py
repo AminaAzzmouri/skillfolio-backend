@@ -249,16 +249,31 @@ TEMPLATES = [
 #     }
 # }
 
+
 # --- Database (Neon when DATABASE_URL set; SQLite otherwise) ---
 import dj_database_url
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=True,
-    )
-}
+DB_URL = os.environ.get("DATABASE_URL", "").strip()
+IS_POSTGRES = DB_URL.startswith("postgres://") or DB_URL.startswith("postgresql://")
+
+if DB_URL:
+    # Use the URL as-is. Neon already includes ?sslmode=require in the URL.
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DB_URL,
+            conn_max_age=600,
+            ssl_require=IS_POSTGRES,  # only apply SSL flag for Postgres URLs
+        )
+    }
+else:
+    # Default to SQLite for local dev/CI
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
 
 
 AUTH_PASSWORD_VALIDATORS = [
