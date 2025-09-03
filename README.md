@@ -16,8 +16,11 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 ### ✅ Implemented
 
-- User authentication (register, login, logout, JWT with refresh-token blacklist)
+- User authentication (register, login, logout, JWT with refresh-token blacklist):
+  *  Login now accepts email or username (or a single login field)
+  * Register auto-derives the username from the email local-part (e.g., john@x.com → john, with -2 if needed)
 - Swagger docs with Bearer token "Authorize" flow (login → paste access → test endpoints)
+  * Auth endpoints annotated with @swagger_auto_schema and grouped under “Auth”
 - Upload and manage certificates (PDF, with metadata: title, date)
 - CRUD for achievements (Certificates, Projects, Goals)
 - Link projects to certificates (guided fields + auto-generated description)
@@ -31,7 +34,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Interactive API docs with Swagger/OpenAPI (drf-yasg)
 - Polished Django Admin (list_display, filters, search, ordering)
 - Basic API smoke tests (auth, certs, projects, analytics)
-- Optional S3 media storage via django-storages (env toggle: USE_S3_MEDIA=True) ✅
+- Optional S3 media storage via django-storages (env toggle: USE_S3_MEDIA=True)
+- Root redirect (/) now points to FRONTEND_URL (defaults to http://localhost:5173/)
+- DB config auto-detects Postgres via DATABASE_URL (Neon/Render) or falls back to SQLite
 
 ### 🛠 Planned / Nice-to-have
 
@@ -85,11 +90,13 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # 4. Install dependencies
 
-- We keep all backend dependencies pinned in requirements.txt (includes Django, DRF, JWT auth, CORS, filtering, Swagger docs, SimpleJWT (blacklist support is built-in & (optionally) S3 storage support).
-  pip install -r requirements.txt
+- We keep all backend dependencies pinned in requirements.txt (includes Django, DRF, JWT auth, CORS, filtering, Swagger docs, SimpleJWT (blacklist support is built-in, (optionally) S3 storage support), Postgres support via dj-database-url/psycopg2-binary).
+
+     pip install -r requirements.txt
 
 - If you add/change packages, re-freeze:
-  pip freeze > requirements.txt
+
+     pip freeze > requirements.txt
 
 # 5. Apply migrations:
 
@@ -135,9 +142,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Add validation (e.g., no past deadline, file size/type check).
 - Add search/ordering params to README.
 - Add Swagger/OpenAPI (e.g., drf-yasg) and basic tests.
-- Swagger docs configured with Bearer token support: use the "Authorize" button in /api/docs
-
-       → paste: `Bearer <ACCESS_TOKEN>` (after logging in via /api/auth/login/)
+- Swagger docs configured with Bearer token support: use the "Authorize" button in /api/docs → paste: `Bearer <ACCESS_TOKEN>` (after logging in via /api/auth/login/)
 
 # 🔑 Logout & Token Blacklist Notes
 
@@ -154,10 +159,10 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Authentication
 
-- JWT login with email/username
-- Register endpoint (dev helper)
+- JWT login with email/username (also accepts single login field)
+- Register endpoint now auto-derives username from email local-part
 - Refresh endpoint
-- Logout endpoint (refresh tokens are blacklisted via `rest_framework_simplejwt.token_blacklist` → already included by default, no extra install needed) ✅
+- Logout endpoint (refresh tokens are blacklisted via `rest_framework_simplejwt.token_blacklist`
 
 # Certificates
 
@@ -181,7 +186,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Computed fields:
   * progress_percent — from completed projects vs target_projects
   * steps_progress_percent — from checklist (completed_steps / total_steps)
-- NEW GoalSteps (named checklist items): /api/goalsteps/ (CRUD), owner-scoped
+- GoalSteps (named checklist items): /api/goalsteps/ (CRUD), owner-scoped
 
 # Filters / Search / Ordering
 
@@ -197,15 +202,17 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 # Docs
 
 - Swagger docs now working (/api/docs/).
+- Auth endpoints grouped with improved schemas via @swagger_auto_schema
 
 # Admin
 
 - Certificates: issuer/date filters, searchable title/issuer, ordered by newest
 - Projects: status/work_type filters, searchable fields, newest-first ordering
 - Goals: title, target/deadline + checklist fields (total_steps, completed_steps), computed steps progress column; inline GoalStep rows; ordered by deadline
-  → Admin is now great for quick QA/debugging of goal checklists
 
-# Basic API smoke tests (auth, certs, projects, GoalSteps: create/list/patch/delete, goal totals auto-sync, analytics) ✅
+# Tests / CI
+
+- Basic API smoke tests (auth, certs, projects, GoalSteps: create/list/patch/delete, goal totals auto-sync, analytics) ✅
 
 # Demo data seeding (optional): 
 - provides quick demo content for testing.
@@ -214,7 +221,9 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Deployment foundations
 
+- DB: DATABASE_URL (Postgres/Neon) auto-detected; falls back to SQLite
 - Env-driven settings (DEBUG/SECRET_KEY/ALLOWED_HOSTS/CORS).
+- FRONTEND_URL drives / redirect (defaults to http://localhost:5173/)
 - Static files via WhiteNoise; Gunicorn start command ready.
 - Optional S3 media wiring behind USE_S3_MEDIA.
 - CI runs tests on GitHub Actions (Python 3.11).
@@ -226,14 +235,13 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 # Goals: Introduce a computed or persisted **status field** (e.g., on_track, achieved, expired).
 
 - Computed option: calculate status dynamically from `progress_percent` and `deadline` in the serializer (no schema change).
-- Persisted option: add a `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.
+- Persisted option: add a DB `status` field in the model (with choices) and update automatically when goals are met or deadlines pass.
 
 * This would make goals more informative by clearly showing whether they are still in progress, completed, or expired.
 
 # Admin polish (future):
 
 - Group fields in detail forms (Basic Info, Guided Fields, Links)
-- Add inline previews for related certificates/projects
 
 # Permissions (optional):
 
@@ -241,22 +249,17 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Deployment hardening:
 
-- Restrict CORS to FE origin (set CORS_ALLOW_ALL_ORIGINS=False and provide your real domain in CORS_ALLOWED_ORIGINS in production env).
-- Production DB migration to managed Postgres/MySQL (add a DATABASE_URL/prod settings and migrate).
 - Caching & performance (e.g., Redis cache backend, DRF throttling, gzip, logging/observability).
 
 # Test coverage:
 
 - Expand beyond smoke tests (edge cases, permissions, validations).
 
-# Swagger annotations 
-(@swagger_auto_schema) for nicer grouping/descriptions.
-
 # Rate limiting / throttling for auth endpoints (DRF throttling classes).
 
 # Logging basics (REST errors, request IDs).
 
-# File storage for prod (S3 or similar) if you want stretch goals.
+# File storage for prod (S3 or similar) when stretching goals is desired.
 
 ---
 
@@ -269,15 +272,15 @@ Base URL (local): http://127.0.0.1:8000
 
 | Endpoint              | Methods | Auth | Notes                                                                                           |
 | --------------------- | ------- | ---- | ----------------------------------------------------------------------------------------------- |
-| `/api/auth/register/` | `POST`  | ❌   | Body: `{ "email", "password" }`. Dev helper for creating users (email used as username).        |
-| `/api/auth/login/`    | `POST`  | ❌   | Body: `{ "email","password" }` OR `{ "username","password" }`. Returns `{ "access","refresh" }`.|
+| `/api/auth/register/` | `POST`  | ❌   | Body: `{ "email", "password" }`. Username is auto-derived from email local-part.        |
+| `/api/auth/login/`    | `POST`  | ❌   | Body: `{ "email","password" }` OR `{ "username","password" } or { "login","password" }.`. Returns `{ "access","refresh" }`.|
 | `/api/auth/refresh/`  | `POST`  | ❌   | Body: `{ "refresh":"..." }`. Exchanges refresh → new access token.                              |
 | `/api/auth/logout/`   | `POST`  | ✅   | Body: `{ "refresh":"..." }`. Blacklists token. Requires Authorization: Bearer <ACCESS>.         |
 
 - Login body examples:  
    { "email": "you@example.com", "password": "pass1234" }
 - Or:  
-   { "username": "you@example.com", "password": "pass1234" }
+   { "username": "you", "password": "pass1234" }
 
 - Use the access token in headers: Authorization: Bearer <ACCESS_TOKEN>
 
@@ -369,19 +372,12 @@ Base URL (local): http://127.0.0.1:8000
     - /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
 
 ℹ️ Auth endpoints (register/login/logout) are now grouped under "Auth" in Swagger.
-    - Register: create a user
-    - Login: get access/refresh
+    - Register: create a user - Register clarifies auto-username from email local-part.
+    - Login: get access/refresh - Supports email/username/login + password.
     - Authorize: paste `Bearer <ACCESS_TOKEN>` to unlock protected endpoints
     - Logout: blacklist refresh token
 
-2.  What more we could add with @swagger_auto_schema:
-
-With @swagger_auto_schema decorators, we can also:
-
-- Add descriptions → clear human-friendly explanations for each operation.
-- Customize schemas → define exact input/output when auto-detection is imperfect.
-
-3. Why this matters
+2. Why this matters
 
    - Frontend devs & testers → instantly know what each endpoint expects.
    - Contributors → clearer reference if the API is ever made public.
@@ -400,7 +396,7 @@ When testing APIs in /api/docs/, follow this sequence:
 
 2. Login to get tokens
     - Endpoint: POST /api/auth/login/
-    - Body: {"email":"you@example.com","password":"pass1234"}
+    - Body: {"email":"you@example.com", "username":"you", "password":"pass1234"}
     - Response: { "refresh":"...", "access":"..." }
 
 3. Authorize in Swagger UI
@@ -425,25 +421,29 @@ python manage.py runserver
 
             curl -X POST http://127.0.0.1:8000/api/auth/register/ \
             -H "Content-Type: application/json" \
-            -d '{"email":"you@example.com","password":"pass1234"}'
+            -d '{"email":"amina@example.com","password":"pass1234"}'
 
 * Returns the new user’s id/username/email (email is used as the username).
 
-
-
 # 2) Login → get access/refresh
 
-- With email
+- With email (not working)
 
             curl -X POST http://127.0.0.1:8000/api/auth/login/ \
             -H "Content-Type: application/json" \
-            -d '{"email":"you@example.com","password":"pass1234"}'
+            -d '{"email":"amina@example.com","password":"pass1234"}'
 
 - With username
 
             curl -X POST http://127.0.0.1:8000/api/auth/login/ \
             -H "Content-Type: application/json" \
-            -d '{"username":"you@example.com","password":"pass1234"}'
+            -d '{"username":"amina","password":"pass1234"}'
+
+- With single login field
+
+            curl -X POST http://127.0.0.1:8000/api/auth/login/ \
+            -H "Content-Type: application/json" \
+            -d '{"login":"amina@example.com","password":"pass1234"}'
 
 - You’ll receive { "access": "...", "refresh": "..." }.
 
@@ -466,33 +466,34 @@ python manage.py runserver
 # Create (json)
 
             curl -X POST http://127.0.0.1:8000/api/certificates/ \
-            -H "Authorization: Bearer <ACCESS_TOKEN>" \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
-            -d '{"title":"Django Basics","issuer":"Coursera","date_earned":"2024-08-01"}'
+            -d '{"title":"...","issuer":"...","date_earned":"2025-08-28"}'
 
 # Create with file
 
             curl -X POST http://127.0.0.1:8000/api/certificates/ \
-            -H "Authorization: Bearer <ACCESS_TOKEN>" \
+            -H "Authorization: Bearer <token>" \
             -F "title=ML Cert" \
-            -F "issuer=Udacity" \
-            -F "date_earned=2024-07-10" \
+            -F "issuer=" \
+            -F "date_earned=" \
             -F "file_upload=@C:/path/to/file.pdf"
 
 # List (default = newest first)
 
             curl http://127.0.0.1:8000/api/certificates/ \
-            -H "Authorization: Bearer <ACCESS_TOKEN>"
+            -H "Authorization: Bearer <token>"
 
 # Filter by id (used when clicking "View certificate" from Projects)
 
-            curl -H "Authorization: Bearer <ACCESS_TOKEN>" \
-            "http://127.0.0.1:8000/api/certificates/?id=5"
+            curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/certificates/?id=35"
 
 # List with project_count
 
-            curl -H "Authorization: Bearer <TOKEN>" \
-            http://localhost:8000/api/certificates/?page=1 | jq '."results"[0] | {id, title, project_count}'
+             curl -H "Authorization: Bearer <token>" \
+             http://127.0.0.1:8000/api/certificates/ \
+             | jq '.results | map({id, title, date_earned, project_count})'
 
 - Example response field:
 
@@ -507,8 +508,8 @@ python manage.py runserver
 
 # Filter by issuer + date
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/certificates/?issuer=Coursera&date_earned=2025-08-01"
+            curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU2NjYzMzM2LCJpYXQiOjE3NTY2NDE3MzYsImp0aSI6ImFkNTg1OGZhY2IxYjQwMDFhNzdkNTUyMDBhZjZkNjQ2IiwidXNlcl9pZCI6MTZ9.gBzpDeKO1mvOmKp8CbP-5fro3uDHDAX1oa7wiebwFjA" \
+            "http://127.0.0.1:8000/api/certificates/?issuer=ALX_Africa&date_earned=2025-08-28"
 
 # Search by title/issuer
 
@@ -517,40 +518,44 @@ python manage.py runserver
 
 # Order oldest → newest
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <token>" \
             "http://127.0.0.1:8000/api/certificates/?ordering=date_earned"
 
 # Partial update (PATCH)
 
-            curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
-            -H "Authorization: Bearer <ACCESS>" \
+            curl -X PATCH http://127.0.0.1:8000/api/certificates/39/ \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
             -d '{"title":"Updated Title"}'
 
 # Full update (PUT)
 
-            curl -X PUT http://127.0.0.1:8000/api/certificates/5/ \
-            -H "Authorization: Bearer <ACCESS>" \
+            curl -X PUT http://127.0.0.1:8000/api/certificates/39/ \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
             -d '{"title":"New Title","issuer":"Udemy","date_earned":"2024-08-01"}'
 
 # PATCH file with multipart (optional)
 
-            curl -X PATCH http://127.0.0.1:8000/api/certificates/5/ \
-            -H "Authorization: Bearer <ACCESS>" \
-            -F "file_upload=@C:/path/to/new.pdf"
+            curl -X PATCH http://127.0.0.1:8000/api/certificates/39/ \
+            -H "Authorization: Bearer <token>" \
+            -F "file_upload=@C:\Users\azzmo\OneDrive\Pictures\Screenshots\Screenshot 2025-08-29 210540.png"
 
 # DELETE
 
-            curl -X DELETE http://127.0.0.1:8000/api/certificates/5/ \
-            -H "Authorization: Bearer <ACCESS>"
+            curl -X DELETE http://127.0.0.1:8000/api/certificates/39/ \
+            -H "Authorization: Bearer <token>"
+
+            then list:
+            curl http://127.0.0.1:8000/api/certificates/ \
+            -H "Authorization: Bearer <token>"
 
 # 4) Projects
 
 # Create (leave description blank; include guided answers):
 
             curl -X POST http://127.0.0.1:8000/api/projects/ \
-            -H "Authorization: Bearer token" \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
             -d '{
               "title": "Portfolio Dashboard",
@@ -558,6 +563,7 @@ python manage.py runserver
               "work_type": "team",
               "duration_text": "2 weeks",
               "primary_goal": "deliver_feature",
+              "certificate": 38,
               "tools_used": "React, Django, DRF",
               "skills_used": "React, Zustand, Tailwind",
               "problem_solved": "Visualize certificate progress in one place.",
@@ -577,57 +583,61 @@ python manage.py runserver
 
 # List
 
-            curl -H http://127.0.0.1:8000/api/projects/
-            "Authorization: Bearer <ACCESS>"
+            curl -H "Authorization: Bearer <token>" \
+            http://127.0.0.1:8000/api/projects/
+            
 
 - You should only see your objects in list/detail views.
 
 # Filter by certificate id
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/projects/?certificate=12"
+            curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/projects/?certificate=35"
 
 # Filter by certificateId (alias)
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/projects/?certificateId=12"
+            curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/projects/?certificateId=38"
 
 # Filter by status
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <token>" \
             "http://127.0.0.1:8000/api/projects/?status=completed"
 
-# Search title/description
+# Search title/description -- description + certificate/status
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <token>" \
             "http://127.0.0.1:8000/api/projects/?search=dashboard"
+
+             curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/projects/?search=dashboard&certificate=38"
+
+            curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/projects/?search=dashboard&status=completed"
 
 # Order oldest → newest
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+            curl -H "Authorization: Bearer <token>" \
             "http://127.0.0.1:8000/api/projects/?ordering=date_created"
 
 # Paginate
 
-            curl -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
-            "http://127.0.0.1:8000/api/projects/?page=2"
+            curl -H "Authorization: Bearer <token>" \
+            "http://127.0.0.1:8000/api/projects/?page=1"
 
-# Partial update: PATCH (status / guided fields / link a certificate):
+# Partial update: PATCH (status / guided fields / link a certificate)
 
-            curl -X PATCH http://127.0.0.1:8000/api/projects/12/ \
-            -H "Authorization: Bearer <ACCESS>" \
+            curl -X PATCH http://127.0.0.1:8000/api/projects/26/ \
+            -H "Authorization: Bearer <tken>" \
             -H "Content-Type: application/json" \
             -d '{
-               "status": "in_progress",
-               "certificate": 5,
-               "duration_text": "3 weeks",
-               "primary_goal": "deliver_feature"
+               "duration_text": "10 weeks"
                }'
 
 # FULL update
 
-            curl -X PUT http://127.0.0.1:8000/api/projects/12/ \
-            -H "Authorization: Bearer <ACCESS>" \
+            curl -X PUT http://127.0.0.1:8000/api/projects/24/ \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
             -d '{
                    "title": "Rewritten Project",
@@ -645,22 +655,22 @@ python manage.py runserver
 
 # Delete
 
-            curl -X DELETE http://127.0.0.1:8000/api/projects/12/ \
-            -H "Authorization: Bearer <ACCESS>"
+            curl -X DELETE http://127.0.0.1:8000/api/projects/25/ \
+            -H "Authorization: Bearer <token>"
 
 # 5) Goals
 
 # Create (with a title and optional checklist counts)
 
             curl -X POST http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer <ACCESS>" \
+            -H "Authorization: Bearer <token>" \
             -H "Content-Type: application/json" \
             -d '{"title":"Ship portfolio v1","target_projects":5,"deadline":"2025-12-31","total_steps":4,"completed_steps":1}'
 
 # List Progress_percent for goal settings
 
             curl http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer <ACCESS_TOKEN_HERE>"
+            -H "Authorization: Bearer <token>"
 
 - Example list item (truncated)
             {
@@ -805,12 +815,13 @@ python manage.py runserver
 ## ⚡ Development Notes
 
 - All resources are scoped per user (you only ever see your own objects).
-- Pagination enabled → use ?page=N.
+- Pagination enabled → use ?page=..
 - Default ordering:
   - Certificates: newest first (-date_earned)
   - Projects: newest first (-date_created)
   - Goals: newest first (-created_at). Ordering supports deadline and checklist fields.
-- For production: set DEBUG=False, restrict ALLOWED_HOSTS, and configure CORS_ALLOWED_ORIGINS to your FE domain.
+- For production: set DEBUG=False, restrict ALLOWED_HOSTS, CORS_ALLOW_ALL_ORIGINS=False, and configure CORS_ALLOWED_ORIGINS to your FE domain.
+- Redirect: / → FRONTEND_URL (defaults to http://localhost:5173/).
 
 ---
 
@@ -915,6 +926,29 @@ python manage.py runserver
 - `DJANGO_ALLOWED_HOSTS` is comma-separated, no spaces.
 - Prefer `CORS_ALLOWED_ORIGINS` in production; keep `CORS_ALLOW_ALL_ORIGINS=True` only for local dev.
 
+- Frontend redirect:
+
+            FRONTEND_URL=https://your-frontend.example.com/
+
+- Database
+   
+   * Postgres (Neon/Render):
+
+            DATABASE_URL=postgres://<user>:<pass>@<host>:5432/<db>
+
+   * Falls back to SQLite if DATABASE_URL is unset.
+
+- Render commands:
+
+   * Build: 
+            pip install -r requirements.txt && python manage.py collectstatic --noinput
+
+   * Start: 
+            python manage.py migrate --noinput && gunicorn skillfolio_backend.wsgi:application --log-file -
+
+- Python Version on Render
+runtime.txt must contain only: python-3.11.9
+
  ### 📦 S3 Media (optional, production)
 
 - To serve uploads from S3, set:
@@ -953,3 +987,45 @@ python manage.py runserver
   * 1 certificate, 1 project (linked to that certificate), and 1 goal
 
 ---
+
+## runtime.txt — Python runtime pin for Render/Heroku
+
+### Purpose
+
+- Tells the Render build system which exact Python version to use.
+- Ensures consistency across local dev, GitHub Actions, and deployed service.
+
+### File contents (musts be exactly one line)
+
+python-3.11.9
+
+### Format rules
+
+- Lowercase python-<major>.<minor>.<patch>
+-No comments, no extra lines, no trailing spaces.
+- The file must sit in the service’s Root Directory (on Render: Settings → Root Directory).
+
+### Notes
+
+- Must match the version installed in your local venv and pinned in CI.
+- If you upgrade Python locally, update this file as well.
+- Render reads this automatically; no extra configuration needed.
+
+* Local venv, GitHub Actions, and runtime.txt should all match (e.g., Python 3.11).
+* In GitHub Actions:
+
+            strategy:
+              matrix:
+                python-version: ["3.11"]
+
+### Troubleshooting
+
+- If Render still picks another version (e.g., 3.13):
+      1. Confirm runtime.txt is in the right folder (your service root).
+      2. Ensure the line is exactly python-3.11.9.
+      3. Clear Build Cache & Deploy on Render.
+      4. Check the first lines of the deploy logs: it should say it’s using Python 3.11.x.
+
+### Why this matters
+
+- Prevents build errors with C extensions (e.g., psycopg2-binary) and keeps CI/prod consistent.
