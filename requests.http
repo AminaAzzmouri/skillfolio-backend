@@ -1,5 +1,10 @@
 ### base
-@base = http://127.0.0.1:8000
+@base = https://skillfolio-backend.onrender.com
+
+
+### @base = http://127.0.0.1:8000
+
+
 
 # =========================================================
 # AUTH
