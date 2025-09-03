@@ -59,6 +59,12 @@ class SkillfolioAPISmokeTests(APITestCase):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        # NEW: make sure login returns identity fields for Navbar
+        self.assertIn("username", r.data)
+        self.assertIn("email", r.data)
+        # In this fixture the username == email (that's how the user was created)
+        self.assertEqual(r.data["email"], "me@example.com")
+        self.assertEqual(r.data["username"], "me@example.com") 
         self.access = r.data["access"]
         self.refresh = r.data["refresh"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
@@ -151,6 +157,10 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
         self.assertIn("access", r2.data)
         self.assertIn("refresh", r2.data)
+        # NEW: verify identity fields are returned for FE
+        self.assertEqual(r2.data["username"], derived_username)
+        self.assertEqual(r2.data["email"], email.lower())
+
 
         # Login with derived username (should also work)
         r3 = c.post(
@@ -159,6 +169,9 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(r3.status_code, status.HTTP_200_OK, r3.data)
         self.assertIn("access", r3.data)
         self.assertIn("refresh", r3.data)
+        self.assertEqual(r3.data["username"], derived_username)
+        self.assertEqual(r3.data["email"], email.lower())
+
 
     def test_refresh_token_flow(self):
         r = self.client.post("/api/auth/refresh/", {"refresh": self.refresh}, format="json")
@@ -171,6 +184,15 @@ class SkillfolioAPISmokeTests(APITestCase):
 
         r2 = self.client.post("/api/auth/refresh/", {"refresh": self.refresh}, format="json")
         self.assertIn(r2.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED])
+    
+    def test_login_bad_credentials(self):
+        c = APIClient()  # fresh client (no Authorization header)    
+        res = c.post(
+            "/api/auth/login/",
+            {"email_or_username": "me@example.com", "password": "wrong"},
+            format="json",
+            )
+        self.assertIn(res.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED))
 
     # -----------------------
     # Certificates

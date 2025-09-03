@@ -44,6 +44,7 @@ from rest_framework_simplejwt.views import (
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 # Swagger / OpenAPI
 from drf_yasg.utils import swagger_auto_schema
@@ -52,13 +53,15 @@ from drf_yasg import openapi
 from rest_framework.permissions import AllowAny
 from .serializers import EmailOrUsernameTokenObtainPairSerializer
 
-
 # Common response schemas for docs
 TOKENS_PAIR_SCHEMA = openapi.Schema(
     type=openapi.TYPE_OBJECT,
+    required=["access", "refresh"],
     properties={
         "access": openapi.Schema(type=openapi.TYPE_STRING, description="Access JWT"),
         "refresh": openapi.Schema(type=openapi.TYPE_STRING, description="Refresh JWT"),
+        "username": openapi.Schema(type=openapi.TYPE_STRING, description="Username for UI display"),
+        "email": openapi.Schema(type=openapi.TYPE_STRING, format="email", description="User email"),
     },
 )
 ACCESS_ONLY_SCHEMA = openapi.Schema(
@@ -72,7 +75,7 @@ ACCESS_ONLY_SCHEMA = openapi.Schema(
 # ---- Swagger request body for login (TWO FIELDS ONLY) ----------------------
 class LoginDocSerializer(serializers.Serializer):
     email_or_username = serializers.CharField(help_text="Type your email address OR your username.")
-    password = serializers.CharField()
+    password = serializers.CharField(write_only=True, style={"input_type":"password"})
 
 class EmailTokenObtainPairView(TokenObtainPairView):
     """POST /api/auth/login/ — Returns refresh & access JWTs (email_or_username + password)."""
@@ -163,18 +166,19 @@ def _suggest_username_from_email(email: str) -> str:
 @permission_classes([permissions.AllowAny])
 def register(request):
     email = (request.data.get("email") or "").strip()
+    email_lc = email.lower()
     password = request.data.get("password")
 
     if not email or not password:
         return Response({"detail": "email and password required"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Prevent duplicate accounts for the same email (case-insensitive)
-    if User.objects.filter(email__iexact=email).exists():
+    if User.objects.filter(email__iexact=email_lc).exists():
         return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
     # Store short username derived from local-part (NOT the full email)      ← UPDATED
     username = _suggest_username_from_email(email)
-    user = User.objects.create_user(username=username, email=email, password=password)
+    user = User.objects.create_user(username=username, email=email_lc, password=password)
     return Response({"id": user.id, "username": user.username, "email": user.email}, status=status.HTTP_201_CREATED)
 
 
@@ -192,17 +196,24 @@ logout_request_schema = openapi.Schema(
     tags=["Auth"],
     operation_description="Blacklist a submitted refresh token to invalidate future use.",
     request_body=logout_request_schema,
-    responses={205: "Reset Content", 400: "Bad Request", 401: "Unauthorized"},
+    responses={204: "No Content", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden"},
 )
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def logout(request):
-    try:
         refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response({"detail": "refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({"detail": "Successfully logged out."}, status=status.HTTP_205_RESET_CONTENT)
-    except Exception:
-        return Response({"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            token = RefreshToken(refresh_token)
+            # Ensure the token being blacklisted belongs to the caller
+            if token.get("user_id") != request.user_id:
+                return Response({"detail":"token does not belong to you"}, status=status.HTTP_403_FORBIDDEN)
+            token.blacklist()
+        except TokenError:
+             return Response({"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST)
+         
+        # No body for 204
+        return Response(status=status.HTTP_204_NO_CONTENT)
+       
