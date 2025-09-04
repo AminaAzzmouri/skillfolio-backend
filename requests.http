@@ -1,8 +1,8 @@
 ### base
-@base = https://skillfolio-backend.onrender.com
+###@base = https://skillfolio-backend.onrender.com
 
 
-###@base = http://127.0.0.1:8000
+@base = http://127.0.0.1:8000
 
 
 
@@ -403,3 +403,189 @@ GET {{base}}/api/schema/
 
 ### Root redirect (should 301/302)
 GET {{base}}/
+
+
+
+
+
+# =========================================================
+# AUTH — PROFILE (/api/auth/me) & CHANGE PASSWORD (isolated user)
+# =========================================================
+
+
+### Register a dedicated user for profile tests
+# @name registerProfile
+POST {{base}}/api/auth/register/
+Content-Type: application/json
+
+
+{
+  "email": "profiletester@example.com",
+  "password": "OldPass123"
+}
+
+
+### Login that user
+# @name loginProfile
+POST {{base}}/api/auth/login/
+Content-Type: application/json
+
+
+{
+  "email_or_username": "profiletester@example.com",
+  "password": "OldPass123"
+}
+
+
+### GET /api/auth/me — fetch current profile
+# @name meGet
+GET {{base}}/api/auth/me/
+Authorization: Bearer {{loginProfile.response.body.access}}
+
+
+### PATCH /api/auth/me — partial update (username only)
+# @name mePatch
+PATCH {{base}}/api/auth/me/
+Authorization: Bearer {{loginProfile.response.body.access}}
+Content-Type: application/json
+
+
+{
+  "username": "profiletester_renamed"
+}
+
+
+### PUT /api/auth/me — full replace (username & email required)
+# @name mePut
+PUT {{base}}/api/auth/me/
+Authorization: Bearer {{loginProfile.response.body.access}}
+Content-Type: application/json
+
+
+{
+  "username": "profiletester_final",
+  "email": "profiletester+new@example.com"
+}
+
+
+### POST /api/auth/change-password — wrong current password (expect 400)
+# @name changePwdBad
+POST {{base}}/api/auth/change-password/
+Authorization: Bearer {{loginProfile.response.body.access}}
+Content-Type: application/json
+
+
+{
+  "current_password": "WRONG",
+  "new_password": "NewPass789"
+}
+
+
+### POST /api/auth/change-password — correct current password (expect 200)
+# @name changePwdOk
+POST {{base}}/api/auth/change-password/
+Authorization: Bearer {{loginProfile.response.body.access}}
+Content-Type: application/json
+
+
+{
+  "current_password": "OldPass123",
+  "new_password": "NewPass789"
+}
+
+
+### Login again with the NEW password (should succeed)
+# @name loginProfileNew
+POST {{base}}/api/auth/login/
+Content-Type: application/json
+
+
+{
+  "email_or_username": "profiletester+new@example.com",
+  "password": "NewPass789"
+}
+
+
+### DELETE /api/auth/me — delete the account (expect 204)
+# @name meDelete
+DELETE {{base}}/api/auth/me/
+Authorization: Bearer {{loginProfileNew.response.body.access}}
+
+
+### Try logging in after deletion (should fail: 400/401)
+POST {{base}}/api/auth/login/
+Content-Type: application/json
+
+
+{
+  "email_or_username": "profiletester+new@example.com",
+  "password": "NewPass789"
+}
+
+
+
+# =========================================================
+# ANNOUNCEMENTS (auth required)
+# =========================================================
+
+
+### List announcements (default ordering -starts_at)
+# @name annList
+GET {{base}}/api/announcements/
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### Filter by type
+GET {{base}}/api/announcements/?type=enrollment
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### Filter by platform (iexact)
+GET {{base}}/api/announcements/?platform=Coursera
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### Date window + search + explicit ordering
+GET {{base}}/api/announcements/?starts_at_after=2024-01-01&ends_at_before=2099-12-31&search=javascript&ordering=-starts_at
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### (Negative test) Without auth — expect 401
+GET {{base}}/api/announcements/
+
+
+
+
+
+# =========================================================
+# FACTS (public)
+# =========================================================
+
+
+### Get one random active fact
+# @name factRandom
+GET {{base}}/api/facts/random/
+
+
+
+
+# =========================================================
+# PLATFORMS (public quick links helper)
+# =========================================================
+
+
+### Search platforms by query (q)
+# @name platformsSearch
+GET {{base}}/api/platforms/?q=machine%20learning
+
+
+### Filter by cost model (free|freemium|subscription|paid|mixed)
+GET {{base}}/api/platforms/?q=data&cost=free
+
+
+### Filter by certificates availability (yes|no)
+GET {{base}}/api/platforms/?q=python&certs=yes
+
+
+### Combined filters
+GET {{base}}/api/platforms/?q=sql&cost=subscription&certs=yes
