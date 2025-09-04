@@ -20,12 +20,15 @@ Notes
 NEW
 - Registered GoalStepViewSet at /api/goalsteps/ for named checklist items
   under a goal (owner-scoped via parent goal).
+- Profile endpoints:
+  * /api/me/ (GET/PUT/PATCH/DELETE) → update identity or delete account
+  * /api/auth/change-password/ (POST) → change password
 """
 
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers, permissions
-from users import views  # resource ViewSets + analytics
+from users import views  # resource ViewSets + analytics + profile
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -42,19 +45,18 @@ from django.shortcuts import redirect
 
 from django.urls import path, include
 
-
-# -----------------------------------------------------------------------------
-# DRF Routers (ViewSets → automatic CRUD endpoints)
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- #
+# DRF Routers (ViewSets → automatic CRUD endpoints)                             #
+# ----------------------------------------------------------------------------- #
 router = routers.DefaultRouter()
 router.register(r"certificates", views.CertificateViewSet, basename="certificate")
 router.register(r"projects", views.ProjectViewSet, basename="project")
 router.register(r"goals", views.GoalViewSet, basename="goal")
 router.register(r"goalsteps", views.GoalStepViewSet, basename="goalstep")  # NEW
 
-# -----------------------------------------------------------------------------
-# API Docs (Swagger/OpenAPI via drf-yasg)
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- #
+# API Docs (Swagger/OpenAPI via drf-yasg)                                       #
+# ----------------------------------------------------------------------------- #
 # /api/docs/   → Swagger UI
 # /api/schema/ → OpenAPI JSON
 from drf_yasg.views import get_schema_view
@@ -73,6 +75,8 @@ schema_view = get_schema_view(
             "- /api/projects/\n"
             "- /api/goals/\n"
             "- /api/goalsteps/  (NEW: named checklist items per goal)\n"
+            "- /api/me/         (NEW: profile)\n"
+            "- /api/auth/change-password/  (NEW)\n"
         ),
         contact=openapi.Contact(email="support@skillfolio.example"),
     ),
@@ -80,11 +84,10 @@ schema_view = get_schema_view(
     permission_classes=[permissions.AllowAny],
 )
 
-# -----------------------------------------------------------------------------
-# URL Patterns
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- #
+# URL Patterns                                                                  #
+# ----------------------------------------------------------------------------- #
 urlpatterns = [
-    
     # tiny root view that redirects to the FE (configurable per env)
     path("", lambda r: redirect(settings.FRONTEND_URL), name="root-redirect"),
 
@@ -94,10 +97,14 @@ urlpatterns = [
     path("api/", include(router.urls)),
 
     # Auth (JWT)
-    path("api/auth/register/", register,                          name="register"),
-    path("api/auth/login/", EmailTokenObtainPairView.as_view(), name="auth_login"),
-    path("api/auth/refresh/", TokenRefreshTaggedView.as_view(),   name="auth_refresh_create"),
-    path("api/auth/logout/",  jwt_logout,                         name="logout"),
+    path("api/auth/register/", register,                            name="register"),
+    path("api/auth/login/",    EmailTokenObtainPairView.as_view(),  name="auth_login"),
+    path("api/auth/refresh/",  TokenRefreshTaggedView.as_view(),    name="auth_refresh_create"),
+    path("api/auth/logout/",   jwt_logout,                          name="logout"),
+
+    # Profile (NEW)
+    path("api/me/", views.MeView.as_view(),                         name="me"),
+    path("api/auth/change-password/", views.ChangePasswordView.as_view(), name="auth_change_password"),
 
     # Analytics
     path("api/analytics/summary/",        views.analytics_summary,        name="analytics-summary"),
@@ -106,10 +113,10 @@ urlpatterns = [
     # API docs
     path("api/docs/",   schema_view.with_ui("swagger", cache_timeout=0), name="api-docs-swagger"),
     path("api/schema/", schema_view.without_ui(cache_timeout=0),         name="openapi-schema"),
-    
+
     path("api/", include("announcements.urls", namespace="announcements")),
 ]
 
 # Dev-only media serving (uploads in /media/)
 if settings.DEBUG:
-     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

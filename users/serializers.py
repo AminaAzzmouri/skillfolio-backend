@@ -29,14 +29,24 @@ NEW
 # Notes
 - We still rely on model.clean() for final enforcement; serializers add
 - friendly API-level messages and normalize data (e.g., clearing end_date when status != completed) so clients see the same behavior as Admin.
+
+Profile / Auth (NEW)
+===============================================================================
+This module now also provides:
+- MeSerializer — for GET/PUT/PATCH /api/me/ (update username/email)
+- ChangePasswordSerializer — for POST /api/auth/change-password/
+These serializers are intentionally small and explicit, mirroring how Admin
+handles identity and password changes (with server-side validation such as
+unique email, non-empty username, and Django’s password validators).
 """
 
 from datetime import date, timedelta
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import Certificate, Project, Goal, GoalStep, Project as ProjectModel
 
-from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
@@ -66,8 +76,9 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=4)
 
+
 # --------------------------------------------------------------------------- #
-# Login payload                                                            #
+# Login payload                                                                #
 # --------------------------------------------------------------------------- #
 
 User = get_user_model()
@@ -78,7 +89,6 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
     inputs for backward-compat. Maps to the serializer's username_field before
     calling the parent validator.
     """
-    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Crucial: don't require 'username' so DRF won't 400 before our validate() runs
@@ -92,7 +102,7 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
             or self.initial_data.get("username")
             or self.initial_data.get("email")
             or ""
-            ).strip()
+        ).strip()
 
         # Always pass a 'password' through to parent
         password = self.initial_data.get("password")
@@ -113,16 +123,77 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
                 attrs[self.username_field] = identifier
 
         data = super().validate(attrs)
-        # Extend response to FE can show username right after login
+        # Extend response so FE can show username right after login
         user = self.user
-        data.update(
-            {
-            "username":getattr(user,"username",""),
-            "email":getattr(user,"email","")
-            }
-            )
+        data.update({
+            "username": getattr(user, "username", ""),
+            "email": getattr(user, "email", ""),
+        })
         return data
-    
+
+
+# --------------------------------------------------------------------------- #
+# Profile / Account serializers (NEW)                                         #
+# --------------------------------------------------------------------------- #
+
+class MeSerializer(serializers.ModelSerializer):
+    """
+    Serializer used by GET/PUT/PATCH /api/me/
+
+    Fields:
+      - id (read-only)
+      - username (required, non-blank)
+      - email (required, unique case-insensitive)
+    Password changes are not handled here; see ChangePasswordSerializer.
+    """
+    class Meta:
+        model = User
+        fields = ["id", "username", "email"]
+        read_only_fields = ["id"]
+
+    def validate_username(self, value: str):
+        v = (value or "").strip()
+        if not v:
+            raise serializers.ValidationError("Username cannot be blank.")
+        return v
+
+    def validate_email(self, value: str):
+        v = (value or "").strip()
+        if not v:
+            raise serializers.ValidationError("Email cannot be blank.")
+        # Ensure unique email (case-insensitive), excluding self
+        qs = User.objects.filter(email__iexact=v)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return v
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """
+    Serializer used by POST /api/auth/change-password/
+
+    Inputs:
+      - current_password (required)
+      - new_password (required; validated by Django validators)
+    """
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        user = self.context.get("request").user
+        cur = attrs.get("current_password") or ""
+        new = attrs.get("new_password") or ""
+
+        if not user.check_password(cur):
+            raise serializers.ValidationError({"current_password": "Current password is incorrect."})
+
+        # Run Django’s configured validators (length, common passwords, etc.)
+        validate_password(new, user=user)
+        return attrs
+
+
 # --------------------------------------------------------------------------- #
 # Certificate                                                                 #
 # --------------------------------------------------------------------------- #
@@ -495,5 +566,3 @@ class GoalSerializer(serializers.ModelSerializer):
         ).count()
         pct = (completed_count / float(target)) * 100.0
         return round(max(0.0, min(pct, 100.0)), 2)
-
-
