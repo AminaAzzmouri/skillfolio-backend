@@ -24,10 +24,8 @@ from rest_framework.views import APIView
 from .models import Announcement, Fact
 from .serializers import AnnouncementSerializer, FactSerializer
 
-
 from urllib.parse import quote_plus
 from .platforms import PLATFORMS
-
 
 
 class AnnouncementFilter(dj_filters.FilterSet):
@@ -74,23 +72,46 @@ class RandomFactView(APIView):
             return Response({"detail": "No active facts available."}, status=404)
         return Response(FactSerializer(fact).data)
 
+
 class PlatformSearchView(APIView):
     """
     GET /api/platforms/?q=machine learning
     Returns platform list with direct search links for the given query.
+
+    Extended:
+    - Optional filters:
+        ?cost=free|freemium|subscription|paid|mixed
+        ?certs=yes|no
+    - Returns extra metadata so the UI can show badges:
+        cost_model, offers_certificates, description
     """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         q = (request.query_params.get("q") or "").strip()
+        cost = (request.query_params.get("cost") or "").strip().lower()       # free|freemium|subscription|paid|mixed
+        certs = (request.query_params.get("certs") or "").strip().lower()     # yes|no
+
         out = []
         for p in PLATFORMS:
+            # --- server-side filtering (optional) ---
+            if cost and p.get("cost_model", "").lower() != cost:
+                continue
+            if certs in ("yes", "true", "1") and not p.get("offers_certificates", False):
+                continue
+            if certs in ("no", "false", "0") and p.get("offers_certificates", False):
+                continue
+
             search_url = p["home"]
             if q:
                 search_url = p["search"].format(q=quote_plus(q))
+
             out.append({
                 "name": p["name"],
                 "category": p.get("category", ""),
+                "description": p.get("description", ""),
+                "cost_model": p.get("cost_model", ""),
+                "offers_certificates": bool(p.get("offers_certificates", False)),
                 "home": p["home"],
                 "search_url": search_url,
             })
