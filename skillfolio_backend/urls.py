@@ -23,6 +23,8 @@ NEW
 - Profile endpoints:
   * /api/me/ (GET/PUT/PATCH/DELETE) → update identity or delete account
   * /api/auth/change-password/ (POST) → change password
+- Centralized profile & password endpoints in users.auth_views and added both:
+  /api/auth/me/  (primary) and /api/me/ (legacy alias), plus /api/auth/change-password/.
 """
 
 from django.contrib import admin
@@ -38,12 +40,11 @@ from users.auth_views import (
     TokenRefreshTaggedView,
     register,
     logout as jwt_logout,
+    AuthMeView,
+    ChangePasswordView,
 )
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from django.shortcuts import redirect
-
-from django.urls import path, include
 
 # ----------------------------------------------------------------------------- #
 # DRF Routers (ViewSets → automatic CRUD endpoints)                             #
@@ -52,13 +53,14 @@ router = routers.DefaultRouter()
 router.register(r"certificates", views.CertificateViewSet, basename="certificate")
 router.register(r"projects", views.ProjectViewSet, basename="project")
 router.register(r"goals", views.GoalViewSet, basename="goal")
-router.register(r"goalsteps", views.GoalStepViewSet, basename="goalstep")  # NEW
+router.register(r"goalsteps", views.GoalStepViewSet, basename="goalstep")
 
 # ----------------------------------------------------------------------------- #
 # API Docs (Swagger/OpenAPI via drf-yasg)                                       #
 # ----------------------------------------------------------------------------- #
 # /api/docs/   → Swagger UI
 # /api/schema/ → OpenAPI JSON
+
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
@@ -67,16 +69,16 @@ schema_view = get_schema_view(
         title="Skillfolio API",
         default_version="v1",
         description=(
-            "Interactive API documentation for Skillfolio.\n\n"
-            "Auth uses JWT (Bearer) tokens. Click 'Authorize' and paste: Bearer <ACCESS_TOKEN>.\n"
-            "List endpoints support filtering/search/ordering where noted.\n\n"
-            "Key endpoints:\n"
-            "- /api/certificates/\n"
-            "- /api/projects/\n"
-            "- /api/goals/\n"
-            "- /api/goalsteps/  (NEW: named checklist items per goal)\n"
-            "- /api/me/         (NEW: profile)\n"
-            "- /api/auth/change-password/  (NEW)\n"
+            "Interactive API documentation for Skillfolio."
+            "Auth uses JWT (Bearer) tokens. Click 'Authorize' and paste: Bearer <ACCESS_TOKEN>."
+            "List endpoints support filtering/search/ordering where noted."
+            "Key endpoints:"
+            "- /api/certificates/"
+            "- /api/projects/"
+            "- /api/goals/"
+            "- /api/goalsteps/  (NEW: named checklist items per goal)"
+            "- /api/auth/me/         (Profile: GET/PUT/PATCH/DELETE)"
+            "- /api/auth/change-password/  (Change Password)"
         ),
         contact=openapi.Contact(email="support@skillfolio.example"),
     ),
@@ -102,9 +104,9 @@ urlpatterns = [
     path("api/auth/refresh/",  TokenRefreshTaggedView.as_view(),    name="auth_refresh_create"),
     path("api/auth/logout/",   jwt_logout,                          name="logout"),
 
-    # Profile (NEW)
-    path("api/me/", views.MeView.as_view(),                         name="me"),
-    path("api/auth/change-password/", views.ChangePasswordView.as_view(), name="auth_change_password"),
+    # Profile
+    path("api/auth/me/", AuthMeView.as_view(),                         name="auth-me"),
+    path("api/auth/change-password/", ChangePasswordView.as_view(), name="auth_change_password"),
 
     # Analytics
     path("api/analytics/summary/",        views.analytics_summary,        name="analytics-summary"),

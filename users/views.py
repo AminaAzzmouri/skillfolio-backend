@@ -25,11 +25,11 @@ NEW
   * PATCH/PUT accepts total_steps and completed_steps (standard model fields).
   * steps_progress_percent is exposed as a computed read-only field alongside
     progress_percent.
-   
+    
 - GoalStepViewSet:
   * CRUD for named steps under a Goal (owner-scoped through parent goal).
   * filterset/search/order helpers for admin-like convenience.
- 
+  
 - CertificateViewSet:
   * Annotates each row with project_count via Count("projects", distinct=True).
     WHY: The Certificates page shows number of associated projects per card.
@@ -40,21 +40,21 @@ NEW
   * Accepts ?certificateId=<id> alias for filtering.
     WHY: Keeps FE query flexible and simple.
 
-Profile & Password Endpoints (NEW)
+API Docs Alignment (Swagger / drf-yasg)
 ===============================================================================
-- GET/PUT/PATCH /api/me/            → MeView (update username/email)
-- DELETE       /api/me/             → account deletion
-- POST         /api/auth/change-password/ → ChangePasswordView
-These endpoints are minimal and owner-scoped. They return simple, explicit
-errors suitable for frontend forms and align with Admin’s behavior.
+drf-yasg targets Swagger 2.0 (not OpenAPI 3), so we AVOID oneOf/anyOf.
+Instead, we:
+- Provide a single unified request schema for Projects and document the
+  status-aware rules in field descriptions (Admin parity).
+- Keep field ORDER in request schemas to match Admin forms.
+- Reuse Admin wording for labels/help so /api/docs reads like the Admin UI.
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count
-from rest_framework import viewsets, permissions, status, serializers, generics
+from django.db.models import Count 
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from .models import Certificate, Project, Goal, GoalStep
 from .serializers import (
@@ -62,8 +62,6 @@ from .serializers import (
     ProjectSerializer,
     GoalSerializer,
     GoalStepSerializer,
-    MeSerializer,                 # NEW
-    ChangePasswordSerializer,     # NEW
 )
 
 # Optional: drf-yasg (only if installed)
@@ -74,82 +72,9 @@ try:
 except Exception:
     HAS_YASG = False
 
-
-# ----------------------------------------------------------------------------- #
-# Profile / Account views (NEW)                                                #
-# ----------------------------------------------------------------------------- #
-
-class MeView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    Retrieve/Update/Delete the authenticated user.
-
-    Methods
-    - GET    /api/me/      → return { id, username, email }
-    - PUT    /api/me/      → update username & email (both required)
-    - PATCH  /api/me/      → update subset of fields
-    - DELETE /api/me/      → permanently delete the account
-
-    Notes
-    - Password changes are handled by POST /api/auth/change-password/.
-    - Unique email is enforced (case-insensitive).
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = MeSerializer
-
-    def get_object(self):
-        return self.request.user
-
-
-class ChangePasswordView(APIView):
-    """
-    POST /api/auth/change-password/
-
-    Body:
-      {
-        "current_password": "<string>",
-        "new_password": "<string>"
-      }
-
-    Behavior:
-    - Verifies the current password matches.
-    - Validates the new password via Django's password validators.
-    - Updates the password atomically.
-    - Returns 200 on success, with a simple message payload:
-        { "detail": "Password updated." }
-
-    Notes
-    - Clients should consider prompting the user to log in again if desired,
-      but this endpoint does not invalidate tokens automatically to keep it simple.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    if HAS_YASG:
-        @swagger_auto_schema(
-            operation_description="Change your password (owner-scoped).",
-            request_body=ChangePasswordSerializer,
-            responses={200: "OK", 400: "Bad Request", 401: "Unauthorized"},
-        )
-        def post(self, request):
-            ser = ChangePasswordSerializer(data=request.data, context={"request": request})
-            ser.is_valid(raise_exception=True)
-            user = request.user
-            user.set_password(ser.validated_data["new_password"])
-            user.save()
-            return Response({"detail": "Password updated."}, status=status.HTTP_200_OK)
-    else:
-        def post(self, request):
-            ser = ChangePasswordSerializer(data=request.data, context={"request": request})
-            ser.is_valid(raise_exception=True)
-            user = request.user
-            user.set_password(ser.validated_data["new_password"])
-            user.save()
-            return Response({"detail": "Password updated."}, status=status.HTTP_200_OK)
-
-
-# ----------------------------------------------------------------------------- #
-# Base ViewSet enforcing per-user ownership                                    #
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
+# Base ViewSet enforcing per-user ownership
+# -----------------------------------------------------------------------------
 class OwnerScopedModelViewSet(viewsets.ModelViewSet):
     """
     A ModelViewSet with two guarantees:
@@ -176,10 +101,9 @@ class OwnerScopedModelViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-# ----------------------------------------------------------------------------- #
-# Resource ViewSets                                                             #
-# ----------------------------------------------------------------------------- #
-
+# -----------------------------------------------------------------------------
+# Resource ViewSets
+# -----------------------------------------------------------------------------
 class CertificateViewSet(OwnerScopedModelViewSet):
     """
     Certificates API
@@ -288,7 +212,7 @@ class ProjectViewSet(OwnerScopedModelViewSet):
     search_fields = ["title", "description", "problem_solved", "tools_used"]
     ordering_fields = ["date_created", "title"]
     ordering = ["-date_created"]  # default newest first
-   
+    
     # NEW: support ?certificateId=<id> as an alias
     def get_queryset(self):
         qs = super().get_queryset().select_related("certificate")
@@ -322,7 +246,7 @@ class ProjectViewSet(OwnerScopedModelViewSet):
         def list(self, request, *args, **kwargs):
             return super().list(request, *args, **kwargs)
 
-        # Request body doc schema — omitted here for brevity; unchanged from your version.
+        # Request body that mirrors Admin field ORDER and help (single schema for Swagger 2)
         _project_props = {
             "title": openapi.Schema(type=openapi.TYPE_STRING, description="Project title."),
             "status": openapi.Schema(
@@ -357,6 +281,9 @@ class ProjectViewSet(OwnerScopedModelViewSet):
 
         _project_request_schema = openapi.Schema(
             type=openapi.TYPE_OBJECT,
+            # ORDER mirrors Admin form:
+            # title → status → start_date → end_date → work_type → duration_text → primary_goal → certificate →
+            # problem_solved → tools_used → skills_used → challenges_short → skills_to_improve → description
             properties=_project_props,
             required=_project_required,
             example={
@@ -625,10 +552,32 @@ class GoalStepViewSet(viewsets.ModelViewSet):
             return super().destroy(request, *args, **kwargs)
 
 
-# ----------------------------------------------------------------------------- #
-# Analytics Endpoints (owner-scoped)                                           #
-# ----------------------------------------------------------------------------- #
+# -----------------------------------------------------------------------------
+# Analytics Endpoints (owner-scoped)
+# -----------------------------------------------------------------------------
 
+@swagger_auto_schema(
+    method="get",
+    tags=["Analytics"],
+    operation_description=(
+        "Owner-scoped KPI counts for the authenticated user.\n\n"
+        "Returns counts of certificates, projects, and goals.\n\n"
+        "Responses:\n"
+        "- 200: OK — object with *_count fields\n"
+        "- 401: Unauthorized — missing/invalid token"
+    ),
+    responses={
+        200: openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                "certificates_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                "projects_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                "goals_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+            },
+        ),
+        401: "Unauthorized",
+    },
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def analytics_summary(request):
@@ -644,12 +593,26 @@ def analytics_summary(request):
     user = request.user
     data = {
         "certificates_count": Certificate.objects.filter(user=user).count(),
-        "projects_count":     Project.objects.filter(user=user).count(),
-        "goals_count":        Goal.objects.filter(user=user).count(),
+        "projects_count": Project.objects.filter(user=user).count(),
+        "goals_count": Goal.objects.filter(user=user).count(),
     }
     return Response(data, status=status.HTTP_200_OK)
 
 
+@swagger_auto_schema(
+    method="get",
+    tags=["Analytics"],
+    operation_description=(
+        "List your goals including computed `progress_percent`.\n\n"
+        "Responses:\n"
+        "- 200: OK — array of Goal objects with progress fields\n"
+        "- 401: Unauthorized"
+    ),
+    responses={
+        200: openapi.Response("OK", GoalSerializer(many=True)),
+        401: "Unauthorized",
+    },
+)
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def analytics_goals_progress(request):
