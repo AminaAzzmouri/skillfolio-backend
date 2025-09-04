@@ -17,8 +17,10 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 ### ✅ Implemented
 
 - User authentication (register, login, logout, JWT with refresh-token blacklist):
-  *  Login now accepts email or username (or a single login field)
+  * Login now accepts email or username (or a single login field)
   * Register auto-derives the username from the email local-part (e.g., john@x.com → john, with -2 if needed)
+- Profile management: `/api/auth/me/` (GET/PUT/PATCH/DELETE) — update username/email or delete account; owner-scoped and JWT-protected.
+- Change password: `/api/auth/change-password/` (POST) — validates current password + Django’s password validators; returns `{ "detail": "Password updated." }`.
 - Swagger docs with Bearer token "Authorize" flow (login → paste access → test endpoints)
   * Auth endpoints annotated with @swagger_auto_schema and grouped under “Auth”
 - Upload and manage certificates (PDF, with metadata: title, date)
@@ -37,6 +39,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Optional S3 media storage via django-storages (env toggle: USE_S3_MEDIA=True)
 - Root redirect (/) now points to FRONTEND_URL (defaults to http://localhost:5173/)
 - DB config auto-detects Postgres via DATABASE_URL (Neon/Render) or falls back to SQLite
+- Announcements app: list time-bounded announcements (enrollments, discounts) with filters, search, ordering.
+- Facts: lightweight random “Did you know?” API for the homepage card (`/api/facts/random/`), owner-scoped admin panel.
 
 ### 🛠 Planned / Nice-to-have
 
@@ -199,6 +203,35 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - /api/analytics/summary/ → counts of certificates, projects, goals
 - /api/analytics/goals-progress/ → list of goals with progress
 
+# # Profile & Password
+
+- `/api/auth/me/` (GET/PUT/PATCH/DELETE)
+  * GET returns `{ id, username, email }`
+  * PUT requires both `username` and `email` (enforces unique email, case-insensitive)
+  * PATCH updates a subset (e.g., just username or email)
+  * DELETE permanently removes the account
+- `/api/auth/change-password/` (POST)
+  * Body: `{ "current_password": "...", "new_password": "..." }`
+  * Validates current password and Django password validators; returns `{"detail": "Password updated."}`
+- Swagger: both endpoints are grouped under **Auth** in `/api/docs/`.
+
+# Announcements & Facts
+
+- Announcements:
+  * `/api/announcements/` (list/filter/search/order user-visible offers)
+  * Filters: by platform, type (enrollment, discount), dates
+  * Search: title/platform/tags
+  * Ordering: default newest first (`-starts_at`)
+
+  - Facts:
+  * `/api/facts/random/` — returns a single random active fact
+  * Public (no auth required), used by “Did you know?” card
+  * Admin can create/disable facts; only active ones are served
+
+- Tests:
+  * New test file for announcements and facts
+  * Covers: announcement filters, fact random retrieval
+
 # Docs
 
 - Swagger docs now working (/api/docs/).
@@ -255,11 +288,11 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 - Expand beyond smoke tests (edge cases, permissions, validations).
 
-# Rate limiting / throttling for auth endpoints (DRF throttling classes).
-
 # Logging basics (REST errors, request IDs).
 
 # File storage for prod (S3 or similar) when stretching goals is desired.
+
+# Extend Swagger docs with detailed response codes for Announcements, Facts, and Analytics endpoints.
 
 ---
 
@@ -270,12 +303,17 @@ Base URL (local): http://127.0.0.1:8000
 
 **Auth**:
 
-| Endpoint              | Methods | Auth | Notes                                                                                           |
-| --------------------- | ------- | ---- | ----------------------------------------------------------------------------------------------- |
-| `/api/auth/register/` | `POST`  | ❌   | Body: `{ "email", "password" }`. Username is auto-derived from email local-part.        |
-| `/api/auth/login/`    | `POST`  | ❌   | Body: `{ "email","password" }` OR `{ "username","password" } or { "login","password" }.`. Returns `{ "access","refresh" }`.|
-| `/api/auth/refresh/`  | `POST`  | ❌   | Body: `{ "refresh":"..." }`. Exchanges refresh → new access token.                              |
-| `/api/auth/logout/`   | `POST`  | ✅   | Body: `{ "refresh":"..." }`. Blacklists token. Requires Authorization: Bearer <ACCESS>.         |
+| Endpoint                    | Methods      | Auth | Notes                                                                                                           |
+| -------------------------- | ------------ | ---- | ---------------------------------------------------------------------------------------------------------------- |
+| `/api/auth/register/`      | `POST`       | ❌   | Body: `{ "email", "password" }`. Username auto-derived from email local-part.                                   |
+| `/api/auth/login/`         | `POST`       | ❌   | Body: `{ "email_or_username","password" }`. Returns `{ "access","refresh","username","email" }`.               |
+| `/api/auth/refresh/`       | `POST`       | ❌   | Body: `{ "refresh":"..." }`. Exchanges refresh → new access token.                                              |
+| `/api/auth/logout/`        | `POST`       | ✅   | Body: `{ "refresh":"..." }`. Blacklists token. Requires `Authorization: Bearer <ACCESS>`.                       |
+| `/api/auth/me/`            | `GET`        | ✅   | Returns `{ id, username, email }`.                                                                              |
+| `/api/auth/me/`            | `PUT/PATCH`  | ✅   | Update username/email (PUT requires both; PATCH allows partial). Enforces unique email (case-insensitive).      |
+| `/api/auth/me/`            | `DELETE`     | ✅   | Permanently delete account. Returns `204 No Content`.                                                           |
+| `/api/auth/change-password/` | `POST`     | ✅   | Body: `{ "current_password", "new_password" }`. Validates current + Django validators; `200 OK` with `detail`.  |
+
 
 - Login body examples:  
    { "email": "you@example.com", "password": "pass1234" }
@@ -376,12 +414,19 @@ Base URL (local): http://127.0.0.1:8000
     - Login: get access/refresh - Supports email/username/login + password.
     - Authorize: paste `Bearer <ACCESS_TOKEN>` to unlock protected endpoints
     - Logout: blacklist refresh token
+    - Profile & Password (under **Auth**):
+      * `/api/auth/me/` (GET/PUT/PATCH/DELETE) — manage identity (username/email) or delete account
+      * `/api/auth/change-password/` (POST) — change password securely
 
 2. Why this matters
 
    - Frontend devs & testers → instantly know what each endpoint expects.
    - Contributors → clearer reference if the API is ever made public.
    - Future me → easy reminder of inputs/outputs after a break.
+
+ℹ️ Announcements & Facts:
+   - Announcements: filter enrollments/discounts, search titles, order by start date
+   - Facts: `/api/facts/random/` returns exactly one random active fact (no auth required)
 
 ---
 
@@ -810,6 +855,125 @@ python manage.py runserver
 
 - Expected: 401/400 error (blacklisted): { "detail": "Invalid or expired refresh token." }
 
+# 8) 🔑 Auth (Profile & Password)
+
+# Get current profile
+
+            curl -H "Authorization: Bearer <token>" \
+            http://127.0.0.1:8000/api/auth/me/
+
+→ Expected:
+            {
+              "id": 1,
+              "username": "amina",
+              "email": "amina@example.com"
+            }
+
+# Full update (PUT — must include both fields)
+
+            curl -X PUT http://127.0.0.1:8000/api/auth/me/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "newusername", "email": "newemail@example.com"}'
+
+→ Expected:
+            {
+              "id": 1,
+              "username": "newusername",
+              "email": "newemail@example.com"
+            }
+
+# Partial update (PATCH — only one field)
+
+            curl -X PUT http://127.0.0.1:8000/api/auth/me/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "justpatched"}'
+
+→ Expected:
+            {
+              "id": 1,
+              "username": "justpatched",
+              "email": "amina@example.com"
+            }
+
+# Delete account
+
+           curl -X DELETE http://127.0.0.1:8000/api/auth/me/ \
+            -H "Authorization: Bearer <ACCESS>" \
+
+→ Expected:
+             204 No Content
+
+# 9) Change password
+
+# Body requires current + new
+
+           curl -X POST http://127.0.0.1:8000/api/auth/change-password/ \
+          -H "Authorization: Bearer <ACCESS>" \
+          -H "Content-Type: application/json" \
+          -d '{"current_password": "oldpass1234", "new_password": "Newpass5678"}'
+
+→ Expected:
+            {
+              "detail": "Password updated successfully."
+            }
+
+→ Errors:
+- 400 if current_password is wrong:
+
+            { "current_password": ["Incorrect password."]}
+
+- 400 if new_password is invalid (too short, too common, numeric only, etc.)
+
+# 10) 📢 Announcements
+
+# List announcements (default ordering = -starts_at)
+
+           curl -H "Authorization: Bearer <ACCESS>" \
+           http://127.0.0.1:8000/api/announcements/
+
+→ Expected:
+            {
+               "id": 1,
+               "platform": "Coursera",
+               "type": "discount",
+               "title": "50% off Machine Learning",
+               "starts_at": "2025-01-01",
+               "ends_at": "2025-02-01"
+            }
+
+# Filter by platform
+
+           curl -H "Authorization: Bearer <ACCESS>" \
+           "http://127.0.0.1:8000/api/announcements/?platform=Coursera"
+
+# Filter by type
+
+           curl -H "Authorization: Bearer <ACCESS>" \
+           "http://127.0.0.1:8000/api/announcements/?type=discount"
+
+# Search in title/platform/tags
+
+           curl -H "Authorization: Bearer <ACCESS>" \
+           "http://127.0.0.1:8000/api/announcements/?search=python"
+
+# Date filtering
+
+           curl -H "Authorization: Bearer <ACCESS>" \
+           "http://127.0.0.1:8000/api/announcements/?starts_at_after=2025-01-01&ends_at_before=2025-12-31"
+
+# 11) # Get one random fact (public)
+
+           curl http://127.0.0.1:8000/api/facts/random/
+
+→ Expected:
+           {
+              "id": 7,
+              "text": "Did you know? Python was named after Monty Python.",
+              "active": true
+           }
+
 ---
 
 ## ⚡ Development Notes
@@ -857,6 +1021,8 @@ python manage.py runserver
     ** Login returns access + refresh.
     ** Refresh exchanges a refresh for a new access token.
     ** Logout blacklists the refresh (subsequent refresh fails).
+    ** Profile: `/api/auth/me/` (GET/PUT/PATCH/DELETE) happy-path + uniqueness checks
+    ** Change Password: `/api/auth/change-password/` (wrong current → 400; success → 200; old login fails; new login works)
 
   - Certificates
     ** Create via JSON.
