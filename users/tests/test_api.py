@@ -5,6 +5,7 @@ from django.conf import settings
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
+
 User = get_user_model()
 
 
@@ -31,6 +32,13 @@ class SkillfolioAPISmokeTests(APITestCase):
       - Docs: /api/docs/ (Swagger) and /api/schema/
       - Root redirect: "/" → settings.FRONTEND_URL (dynamic, not hard-coded)
       - Owner scoping: cannot read other user's objects
+
+      NEW (Profile)
+      - Profile: /api/auth/me (GET/PUT/PATCH/DELETE) identity management
+                 • Enforces unique email (case-insensitive) and non-blank username/email
+      - Password: /api/auth/change-password/ (POST) secure password updates
+                 • Validates current password and Django password validators
+                 • Ensures new password works for login and old one fails
     """
 
     # -----------------------
@@ -64,7 +72,7 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertIn("email", r.data)
         # In this fixture the username == email (that's how the user was created)
         self.assertEqual(r.data["email"], "me@example.com")
-        self.assertEqual(r.data["username"], "me@example.com") 
+        self.assertEqual(r.data["username"], "me@example.com")
         self.access = r.data["access"]
         self.refresh = r.data["refresh"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
@@ -161,7 +169,6 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(r2.data["username"], derived_username)
         self.assertEqual(r2.data["email"], email.lower())
 
-
         # Login with derived username (should also work)
         r3 = c.post(
             "/api/auth/login/", {"email_or_username": derived_username, "password": "abcd1234"}, format="json"
@@ -171,7 +178,6 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertIn("refresh", r3.data)
         self.assertEqual(r3.data["username"], derived_username)
         self.assertEqual(r3.data["email"], email.lower())
-
 
     def test_refresh_token_flow(self):
         r = self.client.post("/api/auth/refresh/", {"refresh": self.refresh}, format="json")
@@ -184,7 +190,7 @@ class SkillfolioAPISmokeTests(APITestCase):
 
         r2 = self.client.post("/api/auth/refresh/", {"refresh": self.refresh}, format="json")
         self.assertIn(r2.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED])
-    
+   
     def test_login_bad_credentials(self):
         c = APIClient()  # fresh client (no Authorization header)    
         res = c.post(
@@ -703,3 +709,88 @@ class SkillfolioAPISmokeTests(APITestCase):
         ).data
         res = self.client.get(f"/api/certificates/{other_cert['id']}/")
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # -----------------------
+    # NEW: Profile (/api/auth/me) and password updates
+    # -----------------------
+    def test_me_get_and_patch_and_put_and_delete(self):
+        """
+        End-to-end identity flow for /api/auth/me/:
+          - GET returns id/username/email
+          - PATCH can update username only
+          - PUT updates both username and email (and enforces unique email)
+          - DELETE removes the account; subsequent login with same creds fails
+        """
+        # GET
+        res = self.client.get("/api/auth/me/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertIn("id", res.data)
+        self.assertEqual(res.data["username"], "me@example.com")
+        self.assertEqual(res.data["email"], "me@example.com")
+
+        # PATCH username only
+        p1 = self.client.patch("/api/auth/me/", {"username": "me_renamed"}, format="json")
+        self.assertEqual(p1.status_code, status.HTTP_200_OK, p1.data)
+        self.assertEqual(p1.data["username"], "me_renamed")
+        self.assertEqual(p1.data["email"], "me@example.com")  # unchanged
+
+        # PUT with other user's email → should fail uniqueness
+        p2 = self.client.put("/api/auth/me/", {"username": "me_renamed2", "email": "other@example.com"}, format="json")
+        self.assertEqual(p2.status_code, status.HTTP_400_BAD_REQUEST, p2.data)
+        self.assertTrue("email" in p2.data, p2.data)
+
+        # PUT with brand new email → should succeed
+        p3 = self.client.put("/api/auth/me/", {"username": "me_final", "email": "mine+new@example.com"}, format="json")
+        self.assertEqual(p3.status_code, status.HTTP_200_OK, p3.data)
+        self.assertEqual(p3.data["username"], "me_final")
+        self.assertEqual(p3.data["email"], "mine+new@example.com")
+
+        # DELETE account
+        d = self.client.delete("/api/auth/me/")
+        self.assertEqual(d.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Login with previous credentials should now fail
+        c = APIClient()
+        bad = c.post("/api/auth/login/", {"email_or_username": "me@example.com", "password": "pass1234"}, format="json")
+        self.assertIn(bad.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED))
+
+    def test_change_password_flow(self):
+        """
+        POST /api/auth/change-password/
+        - Wrong current password → 400
+        - Correct current password → 200 + detail
+        - New password works for login; old one fails
+        """
+        # Wrong current password
+        r1 = self.client.post(
+            "/api/auth/change-password/",
+            {"current_password": "nope", "new_password": "newpass789"},
+            format="json",
+        )
+        self.assertEqual(r1.status_code, status.HTTP_400_BAD_REQUEST, r1.data)
+        self.assertTrue("current_password" in r1.data or "non_field_errors" in r1.data)
+
+        # Correct current password
+        r2 = self.client.post(
+            "/api/auth/change-password/",
+            {"current_password": "pass1234", "new_password": "newpass789"},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, status.HTTP_200_OK, r2.data)
+        self.assertIn("detail", r2.data)
+
+        # Old password should fail now
+        c_bad = APIClient()
+        bad = c_bad.post(
+            "/api/auth/login/", {"email_or_username": "me@example.com", "password": "pass1234"}, format="json"
+        )
+        self.assertIn(bad.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED))
+
+        # New password should work
+        c_ok = APIClient()
+        ok = c_ok.post(
+            "/api/auth/login/", {"email_or_username": "me@example.com", "password": "newpass789"}, format="json"
+        )
+        self.assertEqual(ok.status_code, status.HTTP_200_OK, ok.data)
+        self.assertIn("access", ok.data)
+        self.assertIn("refresh", ok.data)
