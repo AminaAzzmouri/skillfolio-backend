@@ -10,6 +10,7 @@ What this file configures
 - Static + media handling, including optional S3 via django-storages
 - Production serving of static via WhiteNoise
 - **Swagger (drf-yasg) configured to use Bearer tokens in the Authorize dialog**  ← NEW
+- **CSP (django-csp v4) `frame-ancestors` set so frontend (Vercel/localhost) can embed PDFs** 
 
 How environment variables drive behavior (deployment-safe)
 ===============================================================================
@@ -43,7 +44,11 @@ S3 section      -> Activated when USE_S3_MEDIA=True; sets DEFAULT_FILE_STORAGE
                    and MEDIA_URL accordingly.
 Swagger (drf-yasg)
 - SWAGGER_SETTINGS sets a Bearer security scheme and disables session auth,
-  so the Authorize button accepts “Bearer <access-token>”.                 ← NEW
+  so the Authorize button accepts “Bearer <access-token>”.
+
+CSP (django-csp)
+- CONTENT_SECURITY_POLICY.DIRECTIVES.frame-ancestors includes 'self', FE origin,
+  and localhost dev ports so PDFs/media can be embedded inside <iframe>/<object>.
 
 Deployment notes (Render-friendly)
 ===============================================================================
@@ -123,10 +128,55 @@ if not CSRF_TRUSTED_ORIGINS and FRONTEND_URL:
     derived = _origin_from(FRONTEND_URL)
     if derived:
         CSRF_TRUSTED_ORIGINS = [derived]
+        
+
 
 # Allow preview subdomains (e.g., Vercel previews) via regex if you need it, from env:
 #   CORS_ALLOWED_ORIGIN_REGEXES="^https?://.*\.vercel\.app$"
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
+
+# --- Framing / PDF preview ---------------------------------------------------
+# FE (Vercel) needs to embed PDFs served by BE (Render), so we must allow framing.
+X_FRAME_OPTIONS = "ALLOWALL"  # because FE and BE are different origins
+
+# Build allowed ancestors for CSP frame-ancestors
+_frontend_origin = _origin_from(FRONTEND_URL) if FRONTEND_URL else ""
+_allowed_ancestors = set(["'self'"])
+
+if _frontend_origin:
+    _allowed_ancestors.add(_frontend_origin)
+
+# Include any explicit CORS origins too
+for o in CORS_ALLOWED_ORIGINS:
+    if o:
+        _allowed_ancestors.add(o)
+
+# Optional: allow ALL Vercel preview URLs (e.g., https://feature-123.vercel.app)
+if _get_bool("ALLOW_VERCEL_PREVIEWS", False):
+    # CORS (API calls) — regex for previews:
+    CORS_ALLOWED_ORIGIN_REGEXES.append(r"^https://.*\.vercel\.app$")
+    # CSRF (only relevant if you switch to cookie auth later)
+    CSRF_TRUSTED_ORIGINS.append("https://*.vercel.app")
+    # CSP framing:
+    _allowed_ancestors.add("https://*.vercel.app")
+
+# Local dev helpers
+_allowed_ancestors.update([
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+])
+
+# django-csp v4+ format:
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        # Let only these origins frame pages/files (PDF <object>/<iframe>)
+        "frame-ancestors": sorted(_allowed_ancestors),
+    }
+}
+
+
 
 
 # SECRET_KEY with safe production enforcement
@@ -165,6 +215,7 @@ INSTALLED_APPS = [
     # Local apps
     'users',
     'announcements',
+    'csp',
 ]
 
 SWAGGER_SETTINGS = {
@@ -185,6 +236,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
 
     'django.middleware.security.SecurityMiddleware',
+    "csp.middleware.CSPMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Serves static in prod
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

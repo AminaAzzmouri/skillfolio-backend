@@ -45,6 +45,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - DB config auto-detects Postgres via DATABASE_URL (Neon/Render) or falls back to SQLite
 - Announcements app: list time-bounded announcements (enrollments, discounts) with filters, search, ordering.
 - Facts: lightweight random “Did you know?” API for the homepage card (`/api/facts/random/`), owner-scoped admin panel.
+- PDF previews from the backend can be embedded on the frontend via CSP (django-csp) with frame-ancestors allowing your FE origin(s).
 
 ### 🛠 Planned / Nice-to-have
 
@@ -64,6 +65,7 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - JWT Authentication
 - django-filter (filtering)
 - django-cors-headers (CORS)
+- django-csp (Content-Security-Policy headers)
 
 ---
 
@@ -425,6 +427,8 @@ Base URL (local): http://127.0.0.1:8000
     - You can try requests directly from the browser by pasting Bearer <ACCESS_TOKEN> into the “Authorize” button.
 
     - /api/schema/ → machine-readable OpenAPI JSON spec (useful for frontend integration and API clients).
+
+    - Swagger requests will fail if CORS/CSP are misconfigured for your FE domain. Verify CORS_ALLOWED_ORIGINS and CSP frame-ancestors.
 
 ℹ️ Auth endpoints (register/login/logout) are now grouped under "Auth" in Swagger.
     - Register: create a user - Register clarifies auto-username from email local-part.
@@ -986,6 +990,24 @@ python manage.py runserver
 
 ---
 
+## 🧩 PDF Preview Troubleshooting
+
+- If certificate PDFs show a blank box on the frontend:
+
+    1. Open the PDF URL directly in a new tab (must be 200 OK, not 401/403).
+    2. Confirm the backend sends CSP with your FE origin allowed (DevTools → Network → Response Headers should include content-security-policy with your FE domain in frame-ancestors).
+    3. Confirm the backend sets either:
+
+           X_FRAME_OPTIONS=ALLOWALL, and
+           CONTENT_SECURITY_POLICY['DIRECTIVES']['frame-ancestors'] includes:
+           your production FE (https://your-app.vercel.app)
+           your local dev (http://localhost:5173, etc.)
+           optional previews (https://*.vercel.app) when ALLOW_VERCEL_PREVIEWS=1
+
+      4. If using S3/CloudFront for media, make sure the S3/CF domain is public or uses signed URLs and is reachable from the browser.
+
+---
+
 ## 🧪 Running Tests
 
 - We use Django’s built-in test runner with pytest-style assertions for quick backend verification.
@@ -1083,6 +1105,18 @@ python manage.py runserver
             CORS_ALLOW_ALL_ORIGINS=False
             CORS_ALLOWED_ORIGINS=https://your-frontend.example.com
 
+# Frontend → Backend embedding / previews
+- Required so the FE (Vercel/local) can <iframe>/<object> PDFs served by the BE:
+
+            FRONTEND_URL=https://your-app.vercel.app
+            CORS_ALLOW_ALL_ORIGINS=False
+            CORS_ALLOWED_ORIGINS=https://your-app.vercel.app
+            CSRF_TRUSTED_ORIGINS=https://your-app.vercel.app
+
+# Optional: also allow all Vercel preview URLs like https://feature-x.vercel.app
+ALLOW_VERCEL_PREVIEWS=1
+
+
 **Notes**
 
 - When `DJANGO_DEBUG=False`, the app **requires** `DJANGO_SECRET_KEY` (safe default is enforced in code).
@@ -1148,6 +1182,17 @@ runtime.txt must contain only: python-3.11.9
 - Creates:
   * demo user: `demo@skillfolio.dev` / password hash preset `pass1234`
   * 1 certificate, 1 project (linked to that certificate), and 1 goal
+
+---
+
+## "Settings highlights" - CSP/Framing
+
+- We use django-csp (v4+ format) and set:
+
+            X_FRAME_OPTIONS=ALLOWALL
+            CONTENT_SECURITY_POLICY = { "DIRECTIVES": { "frame-ancestors": [...] } }
+            
+- The allowed list is built from FRONTEND_URL + CORS_ALLOWED_ORIGINS (+ *.vercel.app if ALLOW_VERCEL_PREVIEWS=1).
 
 ---
 
