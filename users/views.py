@@ -55,6 +55,7 @@ from django.db.models import Count
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from django.db import models
 
 from .models import Certificate, Project, Goal, GoalStep
 from .serializers import (
@@ -524,9 +525,9 @@ class GoalStepViewSet(viewsets.ModelViewSet):
     tags=["Analytics"],
     operation_description=(
         "Owner-scoped KPI counts for the authenticated user.\n\n"
-        "Returns counts of certificates, projects, and goals.\n\n"
+        "Returns counts of certificates, projects, and goals, plus goal completion stats.\n\n"
         "Responses:\n"
-        "- 200: OK — object with *_count fields\n"
+        "- 200: OK — object with *_count fields and completion metrics\n"
         "- 401: Unauthorized — missing/invalid token"
     ),
     responses={
@@ -536,6 +537,10 @@ class GoalStepViewSet(viewsets.ModelViewSet):
                 "certificates_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                 "projects_count": openapi.Schema(type=openapi.TYPE_INTEGER),
                 "goals_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                # NEW fields:
+                "goals_completed_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                "goals_in_progress_count": openapi.Schema(type=openapi.TYPE_INTEGER),
+                "goals_completion_rate_percent": openapi.Schema(type=openapi.TYPE_NUMBER, format="float"),
             },
         ),
         401: "Unauthorized",
@@ -550,14 +555,35 @@ def analytics_summary(request):
     - certificates_count
     - projects_count
     - goals_count
-
-    Useful for: showing KPIs on a dashboard without multiple round-trips.
+    And NEW completion stats:
+    - goals_completed_count
+    - goals_in_progress_count
+    - goals_completion_rate_percent
     """
     user = request.user
+
+    qs_goals = Goal.objects.filter(user=user)
+    total_goals = qs_goals.count()
+
+    # A goal is "completed" when:
+    # - completed_projects >= target_projects
+    # - AND (no steps required OR completed_steps >= total_steps)
+    completed_goals = qs_goals.filter(
+        completed_projects__gte=models.F("target_projects")
+    ).filter(
+        models.Q(total_steps=0) | models.Q(completed_steps__gte=models.F("total_steps"))
+    ).count()
+
+    completion_rate = round(100 * (completed_goals / float(total_goals)), 1) if total_goals else 0.0
+
     data = {
         "certificates_count": Certificate.objects.filter(user=user).count(),
         "projects_count": Project.objects.filter(user=user).count(),
-        "goals_count": Goal.objects.filter(user=user).count(),
+        "goals_count": total_goals,
+        # NEW:
+        "goals_completed_count": completed_goals,
+        "goals_in_progress_count": max(0, total_goals - completed_goals),
+        "goals_completion_rate_percent": completion_rate,
     }
     return Response(data, status=status.HTTP_200_OK)
 
