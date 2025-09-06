@@ -199,8 +199,22 @@ class ChangePasswordSerializer(serializers.Serializer):
 # --------------------------------------------------------------------------- #
 
 class CertificateSerializer(serializers.ModelSerializer):
-    # Compute on the fly so /api/docs works without queryset annotations.
+    """
+    File update rules (PATCH/PUT):
+    - To KEEP the current file: omit "file_upload" AND omit "clear_file".
+    - To REPLACE the file: send multipart with "file_upload"=<new file>.
+    - To DELETE the file: send JSON or multipart with "clear_file"=true (1/true/yes/on).
+    Notes:
+    - If both are provided, "clear_file" wins and the file will be removed.
+    - Validation still runs on "date_earned" (no future dates).
+    - "project_count" is read-only.
+    """
     project_count = serializers.SerializerMethodField(read_only=True)
+
+    # Let file_upload be optional/nullable
+    file_upload = serializers.FileField(
+        required=False, allow_null=True, use_url=True
+    )
 
     def get_project_count(self, obj):
         try:
@@ -213,9 +227,26 @@ class CertificateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("date_earned cannot be in the future.")
         return value
 
+    def update(self, instance, validated_data):
+        """
+        Handle optional 'clear_file' flag sent by the frontend.
+        If clear_file is true, remove the existing file regardless of new upload.
+        """
+        request = self.context.get("request")
+        clear_flag = (
+            request
+            and str(request.data.get("clear_file", "")).lower() in {"1", "true", "yes", "on"}
+        )
+
+        if clear_flag:
+            if instance.file_upload:
+                instance.file_upload.delete(save=False)
+            instance.file_upload = None
+
+        return super().update(instance, validated_data)
+
     class Meta:
         model = Certificate
-        # Order to match Admin: id/user up top, then core fields, then derived.
         fields = [
             "id",
             "user",

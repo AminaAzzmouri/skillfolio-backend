@@ -342,6 +342,7 @@ Base URL (local): http://127.0.0.1:8000
 - Filter: ?issuer=<str>&date_earned=<YYYY-MM-DD>
 - Search: ?search=<substring> ( matches title, issuer)
 - Ordering: ?ordering=date_earned or ?ordering=-date_earned (also title)
+- Keep existing file: do not include file_upload and do not include clear_file.
 
 - Default ordering: newest first (-date_earned)
 
@@ -601,16 +602,23 @@ python manage.py runserver
             -H "Content-Type: application/json" \
             -d '{"title":"New Title","issuer":"Udemy","date_earned":"2024-08-01"}'
 
-# PATCH file with multipart (optional)
+# PATCH file with multipart (optional) / Replace file: send PATCH /api/certificates/{id}/ as multipart with file_upload=@path/to/new.pdf.
 
             curl -X PATCH http://127.0.0.1:8000/api/certificates/39/ \
-            -H "Authorization: Bearer <token>" \
-            -F "file_upload=@C:\Users\azzmo\OneDrive\Pictures\Screenshots\Screenshot 2025-08-29 210540.png"
+            -H "Authorization: Bearer <ACCESS>" \
+            -F "file_upload=@/path/new.pdf"
+
 
 # DELETE
 
             curl -X DELETE http://127.0.0.1:8000/api/certificates/39/ \
             -H "Authorization: Bearer <token>"
+
+> Send PATCH /api/certificates/{id}/ with JSON body {"clear_file": true}.
+
+            curl -X PATCH http://127.0.0.1:8000/api/certificates/39/ \
+            -H "Authorization: Bearer <ACCESS>" \
+            -H "Content-Type: application/json”
 
             then list:
             curl http://127.0.0.1:8000/api/certificates/ \
