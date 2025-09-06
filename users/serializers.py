@@ -481,35 +481,55 @@ class GoalStepSerializer(serializers.ModelSerializer):
 
 
 class GoalSerializer(serializers.ModelSerializer):
-    # Derived metrics & nested steps (read-only)
-    progress_percent = serializers.SerializerMethodField(read_only=True)
+    """
+    Self-contained goal tracking:
+      - target_projects (≥1) + completed_projects  -> projects_progress_percent
+      - total/completed OR named steps (goal.steps) -> steps_progress_percent (model property)
+      - overall_progress_percent = avg(projects_progress_percent, steps_progress_percent)
+    """
+    # Read-only computed metrics (no coupling to real Project model)
+    projects_progress_percent = serializers.SerializerMethodField(read_only=True)
+    overall_progress_percent = serializers.SerializerMethodField(read_only=True)
+
+    # If your Goal model exposes these as @property, keep them as read-only fields.
     steps_progress_percent = serializers.ReadOnlyField()
     steps_total = serializers.ReadOnlyField()
     steps_completed = serializers.ReadOnlyField()
     steps = GoalStepSerializer(many=True, read_only=True)
 
-    # Enforce positivity at serializer level to match Admin min=1 UI
+    # Inputs (match your Admin/FE labels)
     target_projects = serializers.IntegerField(
         min_value=1,
         label="Target number of projects to build",
         help_text="Number of projects to complete (must be ≥ 1).",
     )
+    completed_projects = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        label="Accomplished projects",
+        help_text="Optional; clamped to the target.",
+    )
 
     class Meta:
         model = Goal
-        # Order to match Admin form (each on its own line there)
         fields = [
             "id",
             "user",
             "title",
+            # projects plan
             "target_projects",
-            "deadline",
+            "completed_projects",
+            "projects_progress_percent",
+            # steps (optional)
             "total_steps",
             "completed_steps",
-            "progress_percent",
             "steps_progress_percent",
             "steps_total",
             "steps_completed",
+            # overall
+            "overall_progress_percent",
+            # misc
+            "deadline",
             "created_at",
             "steps",
         ]
@@ -517,10 +537,11 @@ class GoalSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "created_at",
-            "progress_percent",
+            "projects_progress_percent",
             "steps_progress_percent",
             "steps_total",
             "steps_completed",
+            "overall_progress_percent",
         )
         extra_kwargs = {
             "total_steps": {
@@ -538,31 +559,37 @@ class GoalSerializer(serializers.ModelSerializer):
             },
         }
 
-    # Validators consistent with Admin/model
+    # ---- validation ----
     def validate_deadline(self, value):
         if value and value < _today():
             raise serializers.ValidationError("deadline cannot be in the past.")
         return value
 
     def validate(self, attrs):
-        # Keep completed_steps within total_steps (mirror model.clean safety)
+        # clamp accomplished steps to total
         total = attrs.get("total_steps", getattr(self.instance, "total_steps", 0)) or 0
         done = attrs.get("completed_steps", getattr(self.instance, "completed_steps", 0)) or 0
         if done > total:
             attrs["completed_steps"] = total
+
+        # clamp accomplished projects to target
+        tgt = attrs.get("target_projects", getattr(self.instance, "target_projects", 0)) or 0
+        proj_done = attrs.get("completed_projects", getattr(self.instance, "completed_projects", 0)) or 0
+        if proj_done > tgt:
+            attrs["completed_projects"] = tgt
+
         return attrs
 
-    def get_progress_percent(self, obj):
-        # Same semantics as before (user-scoped completed projects)
-        request = self.context.get("request")
-        if not request or not getattr(request, "user", None) or not request.user.is_authenticated:
+    # ---- computed percents (server-side, no DB coupling to real projects) ----
+    def get_projects_progress_percent(self, obj) -> int:
+        tgt = obj.target_projects or 0
+        if tgt <= 0:
             return 0
-        target = obj.target_projects or 0
-        if target <= 0:
-            return 0
-        completed_count = ProjectModel.objects.filter(
-            user=request.user,
-            status=ProjectModel.STATUS_COMPLETED,
-        ).count()
-        pct = (completed_count / float(target)) * 100.0
-        return round(max(0.0, min(pct, 100.0)), 2)
+        done = max(0, min(obj.completed_projects or 0, tgt))
+        return round(100 * (done / float(tgt)))
+
+    def get_overall_progress_percent(self, obj) -> int:
+        # rely on the model's steps_progress_percent property (already accounts for named steps fallback)
+        steps_pct = getattr(obj, "steps_progress_percent", 0) or 0
+        proj_pct = self.get_projects_progress_percent(obj)
+        return round((proj_pct + steps_pct) / 2.0)

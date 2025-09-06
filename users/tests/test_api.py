@@ -24,9 +24,10 @@ class SkillfolioAPISmokeTests(APITestCase):
                   DELETE, ?certificateId alias, status-aware date validations,
                   end_date clearing when not completed, duration_text derivation,
                   auto-generated description when blank
-      - Goals: CRUD, validations (negative target / past deadline),
-               progress_percent (based on user's completed projects),
-               steps_progress_percent (and capping completed_steps)
+      - Goals (UPDATED): CRUD, validations (negative target / past deadline),
+               projects_progress_percent (independent counter, not linked to Project model),
+               steps_progress_percent (named steps fallback to totals),
+               overall_progress_percent (average of the two, rounded)
       - GoalSteps: CRUD + parent Goal counters auto-sync, forbid cross-user step creation
       - Analytics: /api/analytics/summary and /api/analytics/goals-progress
       - Docs: /api/docs/ (Swagger) and /api/schema/
@@ -496,44 +497,61 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertTrue((r.data.get("description") or "").strip() != "")
 
     # -----------------------
-    # Goals
+    # Goals (UPDATED)
     # -----------------------
-    def test_goals_crud_and_progress_computation(self):
-        # Create goal with target 2
+    def test_goals_crud_projects_steps_and_overall_progress(self):
+        """
+        Verify goal CRUD + independent projects progress, steps progress,
+        and overall (average of both).
+        """
+        # Create with steps + no accomplished projects yet
         g = self.client.post(
             "/api/goals/",
-            {"title": "Hit 2 projects", "target_projects": 2, "deadline": "2099-01-01"},
+            {
+                "title": "Ship v1",
+                "target_projects": 5,
+                "completed_projects": 0,
+                "deadline": "2099-12-31",
+                "total_steps": 4,
+                "completed_steps": 1,
+            },
             format="json",
         )
         self.assertEqual(g.status_code, status.HTTP_201_CREATED, g.data)
         gid = g.data["id"]
-        self.assertIn("progress_percent", g.data)
-        self.assertEqual(g.data["progress_percent"], 0)
 
-        # One completed project → 50%
-        _ = self.make_project(
-            title="Completed Thing",
-            status="completed",
-            description="Done",
-            start_date=self.TWO_DAYS_AGO,
-            end_date=self.YESTERDAY,
+        # Initial percents
+        self.assertIn("projects_progress_percent", g.data)
+        self.assertIn("steps_progress_percent", g.data)
+        self.assertIn("overall_progress_percent", g.data)
+        self.assertEqual(g.data["projects_progress_percent"], 0)
+        self.assertEqual(g.data["steps_progress_percent"], 25)
+        # overall = round((0 + 25)/2) => 12 or 12 (int)
+        self.assertIn(g.data["overall_progress_percent"], (12,))  # round-to-nearest int
+
+        # Update accomplished projects and steps
+        p = self.client.patch(
+            f"/api/goals/{gid}/",
+            {"completed_projects": 2, "completed_steps": 3},
+            format="json",
         )
-
-        lst = self.client.get("/api/goals/")
-        self.assertEqual(lst.status_code, status.HTTP_200_OK)
-        items = self.items(lst)
-        mine = next((x for x in items if x["id"] == gid), None)
-        self.assertIsNotNone(mine)
-        # Depending on rounding, your serializer may return 50 or 50.0; accept exact float here
-        self.assertEqual(mine["progress_percent"], 50.0)
-
-        # Update target → 25.0
-        p = self.client.patch(f"/api/goals/{gid}/", {"target_projects": 4}, format="json")
         self.assertEqual(p.status_code, status.HTTP_200_OK, p.data)
-        self.assertEqual(p.data["target_projects"], 4)
-        g1 = self.client.get(f"/api/goals/{gid}/")
-        self.assertEqual(g1.status_code, status.HTTP_200_OK)
-        self.assertEqual(g1.data["progress_percent"], 25.0)
+        # 2/5 => 40%
+        self.assertEqual(p.data["projects_progress_percent"], 40)
+        # 3/4 => 75%
+        self.assertEqual(p.data["steps_progress_percent"], 75)
+        # overall ~ round((40+75)/2) = round(57.5) -> 58 (typical Python round half to even is 58 here)
+        self.assertIn(p.data["overall_progress_percent"], (57, 58))
+
+        # Cap accomplished to target
+        p2 = self.client.patch(
+            f"/api/goals/{gid}/",
+            {"completed_projects": 999},
+            format="json",
+        )
+        self.assertEqual(p2.status_code, status.HTTP_200_OK, p2.data)
+        self.assertEqual(p2.data["completed_projects"], 5)  # clamped to target
+        self.assertEqual(p2.data["projects_progress_percent"], 100)
 
         # DELETE
         d = self.client.delete(f"/api/goals/{gid}/")
@@ -558,6 +576,25 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(res_past.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("deadline", res_past.data)
 
+    def test_goals_overall_progress_when_no_steps(self):
+        """
+        When there are no steps (totals 0), steps progress is 0 and overall averages with projects.
+        """
+        g = self.client.post(
+            "/api/goals/",
+            {
+                "title": "No steps yet",
+                "target_projects": 4,
+                "completed_projects": 1,  # 25%
+                "deadline": "2099-01-01",
+            },
+            format="json",
+        )
+        self.assertEqual(g.status_code, status.HTTP_201_CREATED, g.data)
+        self.assertEqual(g.data["projects_progress_percent"], 25)
+        self.assertEqual(g.data["steps_progress_percent"], 0)
+        self.assertIn(g.data["overall_progress_percent"], (12,))  # round((25+0)/2) = 12 or 12
+
     def test_goals_title_and_steps_progress_fields_present(self):
         create = self.client.post(
             "/api/goals/",
@@ -580,6 +617,21 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertEqual(patch.status_code, status.HTTP_200_OK, patch.data)
         self.assertEqual(patch.data["completed_steps"], 3)
         self.assertEqual(patch.data["steps_progress_percent"], 75)
+
+    def test_goals_completed_projects_capped(self):
+        g = self.client.post(
+            "/api/goals/",
+            {
+                "title": "Cap projects",
+                "target_projects": 3,
+                "completed_projects": 10,  # should clamp to 3
+                "deadline": "2099-01-01",
+            },
+            format="json",
+        )
+        self.assertEqual(g.status_code, status.HTTP_201_CREATED, g.data)
+        self.assertEqual(g.data["completed_projects"], 3)
+        self.assertEqual(g.data["projects_progress_percent"], 100)
 
     # -----------------------
     # GoalSteps
@@ -656,7 +708,9 @@ class SkillfolioAPISmokeTests(APITestCase):
         _ = self.make_cert(title="C", issuer="I", date_earned=self.TWO_DAYS_AGO)
         _ = self.make_project(title="Planned One", status="planned", description="d")
         _ = self.client.post(
-            "/api/goals/", {"title": "G", "target_projects": 1, "deadline": "2099-01-01"}, format="json"
+            "/api/goals/",
+            {"title": "G", "target_projects": 1, "completed_projects": 0, "deadline": "2099-01-01"},
+            format="json",
         )
 
         res = self.client.get("/api/analytics/summary/")
@@ -666,16 +720,34 @@ class SkillfolioAPISmokeTests(APITestCase):
         self.assertGreaterEqual(res.data["goals_count"], 1)
 
     def test_analytics_goals_progress_endpoint(self):
+        """
+        Ensure analytics/goals-progress returns the new progress fields,
+        computed independently of real Project objects.
+        """
         g = self.client.post(
-            "/api/goals/", {"title": "One", "target_projects": 1, "deadline": "2099-01-01"}, format="json"
+            "/api/goals/",
+            {
+                "title": "Analytics Goal",
+                "target_projects": 2,
+                "completed_projects": 1,  # 50%
+                "deadline": "2099-01-01",
+                "total_steps": 0,         # steps percent 0
+                "completed_steps": 0,
+            },
+            format="json",
         ).data
-        _ = self.make_project(status="completed", start_date=self.TWO_DAYS_AGO, end_date=self.YESTERDAY)
+
         res = self.client.get("/api/analytics/goals-progress/")
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
         items = self.items(res)
         goal = next((x for x in items if x["id"] == g["id"]), None)
         self.assertIsNotNone(goal)
-        self.assertEqual(goal["progress_percent"], 100.0)
+        self.assertIn("projects_progress_percent", goal)
+        self.assertIn("steps_progress_percent", goal)
+        self.assertIn("overall_progress_percent", goal)
+        self.assertEqual(goal["projects_progress_percent"], 50)
+        self.assertEqual(goal["steps_progress_percent"], 0)
+        self.assertIn(goal["overall_progress_percent"], (25,))  # round((50+0)/2)=25
 
     def test_docs_and_schema_available(self):
         # Swagger UI and OpenAPI JSON should be public (AllowAny)

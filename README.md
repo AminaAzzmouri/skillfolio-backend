@@ -29,7 +29,11 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 - Certificates list includes a project_count annotation (projects linked per certificate).
 - Certificates endpoint accepts ?id=<pk> filter for direct linking from the Projects page.
 - Projects endpoint also accepts ?certificateId=<id> (alias for ?certificate=<id>).
-- Goal checklists: named steps (create/check/reorder) + per-goal checklist progress; admin inline editor; new /api/goalsteps/ endpoints
+- Goal checklists: named steps (create/check/reorder) + per-goal checklist progress; admin inline editor; /api/goalsteps/ endpoints
+- Progress bars per goal:
+    * Projects progress: completed_projects / target_projects
+    * Steps progress: from GoalSteps (if any) or from total_steps/completed_steps
+    * Overall progress: average of projects & steps bars (read-only)
 - Set and track learning goals (with deadlines, validations, and progress tracking)
 - Filtering / search / ordering across list endpoints (see Quick Reference)
 - Analytics endpoints for dashboard summary & goal progress (frontend)
@@ -185,12 +189,19 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 # Goals
 
 - Model, serializer, viewset, endpoints
-- Fields: title, target_projects, deadline, total_steps, completed_steps
-- Validations: deadline in the future, target_projects > 0; checklist fields clamped
-- Computed fields:
-  * progress_percent — from completed projects vs target_projects
-  * steps_progress_percent — from checklist (completed_steps / total_steps)
-- GoalSteps (named checklist items): /api/goalsteps/ (CRUD), owner-scoped
+- Fields:
+  * `title` (string)
+  * `target_projects` (int, > 0)
+  * `completed_projects` (int, ≥ 0, **independent** of real Projects; capped to target)
+  * `deadline` (date)
+  * `total_steps` (int, default 0)
+  * `completed_steps` (int, default 0)
+- Validations: `deadline` not in past, `target_projects` > 0; steps and accomplished projects are clamped to valid ranges
+- Computed (read-only):
+  * `projects_progress_percent` — `completed_projects / target_projects * 100`
+  * `steps_progress_percent` — from GoalSteps (if any) else `completed_steps / total_steps * 100`
+  * `overall_progress_percent` — average of the two (rounded)
+- GoalSteps (named checklist items): `/api/goalsteps/` (CRUD), owner-scoped
 
 # Filters / Search / Ordering
 
@@ -294,6 +305,8 @@ Built with **Django REST Framework**, the backend provides secure APIs for authe
 
 # Extend Swagger docs with detailed response codes for Announcements, Facts, and Analytics endpoints.
 
+# Expose an owner-scoped **overall goals progress** (across all goals) endpoint for the dashboard (e.g., weighted or simple average).
+
 ---
 
 ## 📌 API Quick Reference:
@@ -359,29 +372,31 @@ Base URL (local): http://127.0.0.1:8000
 
 **Goals**: Base: /api/goals/
 
-- Filter: ?deadline=<YYYY-MM-DD>
-- Ordering: ?ordering=created_at | -created_at | deadline | -deadline | total_steps | -total_steps | completed_steps | -completed_steps
-- Pagination: ?page=1
+- Filter: `?deadline=<YYYY-MM-DD>`
+- Ordering: `?ordering=created_at | -created_at | deadline | -deadline | total_steps | -total_steps | completed_steps | -completed_steps | completed_projects | -completed_projects | title | -title`
+- Pagination: `?page=1`
+- Default ordering: newest first (`-created_at`)
 
-- Default ordering: newest first (-created_at)
 - Fields:
-  * title (string)
-  * target_projects (int, >0)
-  * deadline (date)
-  * total_steps (int, default 0)
-  * completed_steps (int, default 0)
+  * `title` (string)
+  * `target_projects` (int, > 0)
+  * `completed_projects` (int, ≥ 0, optional on create/update; capped to target)
+  * `deadline` (date)
+  * `total_steps` (int, default 0)
+  * `completed_steps` (int, default 0)
+
 - Computed (read-only):
-  * `progress_percent` (read-only): completed projects vs `target_projects`
-  * `steps_progress_percent` (read-only): `completed_steps / total_steps * 100`
+  * `projects_progress_percent` — `completed_projects / target_projects * 100`
+  * `steps_progress_percent` — from GoalSteps if present, otherwise `completed_steps / total_steps * 100`
+  * `overall_progress_percent` — average of the two bars (rounded)
 
-
-| Operation | Method      | URL                | Body                                                                 | Notes                                                                                     |
-| --------- | ----------- | ------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| List      | `GET`       | `/api/goals/`      | —                                                                    | Returns only the authenticated user’s goals. Includes computed progress fields.           |
-| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                                                    |                                                                                           |
-| Create    | `POST`      | `/api/goals/`      | `{ "title","target_projects","deadline","total_steps?","completed_steps?" }` | `deadline` is `YYYY-MM-DD`. Checklist fields optional (default 0).                        |
-| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                                                 | You can edit title/target/deadline and checklist counts.                                  |
-| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                                                    |                                                                                           |
+| Operation | Method      | URL                | Body                                                                                       | Notes                                                                                                           |
+| --------- | ----------- | ------------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| List      | `GET`       | `/api/goals/`      | —                                                                                          | Returns only the authenticated user’s goals. Includes computed progress fields.                                 |
+| Retrieve  | `GET`       | `/api/goals/{id}/` | —                                                                                          |                                                                                                                 |
+| Create    | `POST`      | `/api/goals/`      | `{ "title","target_projects","completed_projects?","deadline","total_steps?","completed_steps?" }` | `completed_projects` optional (default 0); steps optional; values are clamped (no negatives, capped to totals). |
+| Update    | `PUT/PATCH` | `/api/goals/{id}/` | JSON                                                                                       | You can edit title/target/completed_projects/deadline and checklist counts.                                     |
+| Delete    | `DELETE`    | `/api/goals/{id}/` | —                                                                                          |                                                                                                                 |
 
 **GoalSteps**: Base: /api/goalsteps/
 
@@ -404,6 +419,8 @@ Base URL (local): http://127.0.0.1:8000
 
     - /api/docs/ → interactive API docs.
       Lists all endpoints (certificates, projects, goals, auth, analytics, logout).
+
+    - In Swagger, Goals responses now include `projects_progress_percent`, `steps_progress_percent`, and `overall_progress_percent`. The request body accepts `completed_projects` in addition to `target_projects`, `deadline`, and (optional) `total_steps/completed_steps`.
 
     - You can try requests directly from the browser by pasting Bearer <ACCESS_TOKEN> into the “Authorize” button.
 
@@ -705,68 +722,72 @@ python manage.py runserver
 
 # 5) Goals
 
-# Create (with a title and optional checklist counts)
+# Create (with optional accomplished-projects & checklist counts)
 
             curl -X POST http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer <token>" \
+            -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
-            -d '{"title":"Ship portfolio v1","target_projects":5,"deadline":"2025-12-31","total_steps":4,"completed_steps":1}'
+            -d '{
+              "title":"Ship portfolio v1",
+              "target_projects":5,
+              "completed_projects":1,
+              "deadline":"2025-12-31",
+              "total_steps":4,
+              "completed_steps":1
+            }'
 
-# List Progress_percent for goal settings
+# List (see all computed bars)
 
-            curl http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer <token>"
+            curl -H "Authorization: Bearer <ACCESS>" \
+            http://127.0.0.1:8000/api/goals/
 
 - Example list item (truncated)
             {
-              "id": 3,
+              "id": 7,
               "title": "Ship portfolio v1",
               "target_projects": 5,
+              "completed_projects": 1,
               "deadline": "2025-12-31",
               "total_steps": 4,
               "completed_steps": 1,
+              "projects_progress_percent": 20,
               "steps_progress_percent": 25,
-              "progress_percent": 20.0,   // from completed projects vs target
+              "overall_progress_percent": 22.5,
               "created_at": "2025-08-23T10:55:41Z",
-              "user": 1
+              "user": 1,
+              "steps": [...]
             }
 
-# Filter by deadline
-
-            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
-            "http://127.0.0.1:8000/api/goals/?deadline=2025-12-31"
-
-# Order oldest → newest
-
-            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
-            "http://127.0.0.1:8000/api/goals/?ordering=created_at"
-
-# Paginate
-
-            curl -H "Authorization: Bearer <ACCESS_TOKEN_HERE>" \
-            "http://127.0.0.1:8000/api/goals/?page=2"
-
-
-# Partial Update (e.g., bump completed steps)
+# Increment accomplished projects (updates projects progress)
 
             curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
-            -d '{"completed_steps": 2}'
+            -d '{"completed_projects": 2}'
 
-# Full Update
+# Bump completed steps (updates steps progress)
 
-            curl -X PUT http://127.0.0.1:8000/api/goals/7/ \
+            curl -X PATCH http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>" \
             -H "Content-Type: application/json" \
-            -d '{"title":"New Title","target_projects":12,"deadline":"2025-12-31","total_steps":6,"completed_steps":3}'
+            -d '{"completed_steps": 3}'
 
-# DELETE:
+# Filter by deadline
+
+            curl -H "Authorization: Bearer <ACCESS>" \
+            "http://127.0.0.1:8000/api/goals/?deadline=2025-12-31"
+
+# Order by most steps completed
+
+            curl -H "Authorization: Bearer <ACCESS>" \
+            "http://127.0.0.1:8000/api/goals/?ordering=-completed_steps"
+
+# Delete
 
             curl -X DELETE http://127.0.0.1:8000/api/goals/7/ \
             -H "Authorization: Bearer <ACCESS>"
 
-### Goal Steps (checklist items)
+### Goal Steps (checklist items) — unchanged usage
 
 # Create a step
 
@@ -787,41 +808,6 @@ python manage.py runserver
             -H "Content-Type: application/json" \
             -d '{"is_done": true}'
 
-# Reorder a step (optional)
-
-            curl -X PATCH http://127.0.0.1:8000/api/goalsteps/15/ \
-            -H "Authorization: Bearer <ACCESS>" \
-            -H "Content-Type: application/json" \
-            -d '{"order": 2}'
-
-# Delete a step
-
-            curl -X DELETE http://127.0.0.1:8000/api/goalsteps/15/ \
-            -H "Authorization: Bearer <ACCESS>"
-
-- Note: Creating/updating/deleting GoalSteps automatically keeps a goal’s `total_steps` / `completed_steps` in sync, and `steps_progress_percent` updates accordingly.
-
-
-### Goal Settings validations
-
-- Negative target:
-
-            curl -X POST http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"target_projects": -1, "deadline": "2030-01-01"}'
-
-            → Expected: {"target_projects": ["target_projects must be > 0."]}
-
-- Past deadline:
-
-            curl -X POST http://127.0.0.1:8000/api/goals/ \
-            -H "Authorization: Bearer ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"target_projects": 3, "deadline": "2000-01-01"}'
-
-            → Expected: {"deadline": ["deadline cannot be in the past."]}
-
 # 6) Analytics
 
 # Summary counts
@@ -836,7 +822,18 @@ python manage.py runserver
             curl -H "Authorization: Bearer <ACCESS>"
             http://127.0.0.1:8000/api/analytics/goals-progress/
 
-- → Expected:  [{"id": 3, "target_projects": 5, "progress_percent": 40.0, ...}]
+- → Expected:  
+
+            [{
+              "id": 3,
+              "title": "Ship portfolio v1",
+              "target_projects": 5,
+              "completed_projects": 2,
+              "projects_progress_percent": 40,
+              "steps_progress_percent": 25,
+              "overall_progress_percent": 32.5,
+              ...
+            }]
 
 # 7) Logout (refresh-token blacklist)
 

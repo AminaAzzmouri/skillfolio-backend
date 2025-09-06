@@ -130,12 +130,6 @@ Notes
   ensures the forms cooperate with that behavior.
 """
 
-"""
-users/admin.py — Django Admin configuration for Skillfolio
-
-[... trimmed header stays the same; keeping your full docstring ...]
-"""
-
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.safestring import mark_safe
@@ -470,28 +464,43 @@ class GoalAdmin(admin.ModelAdmin):
     Goal admin tweaks:
     - Vertical layout (no side-by-side tuples).
     - Labels in the form only:
-        * target_projects -> “Target number of projects to build”
-        * total_steps     -> “Overall required steps”
-        * completed_steps -> “Accomplished steps”
+        * target_projects     -> “Target number of projects to build”
+        * completed_projects  -> “Accomplished projects”
+        * total_steps         -> “Overall required steps”
+        * completed_steps     -> “Accomplished steps”
     - Form-level rules:
-        * completed_steps is optional (required=False)
-        * total_steps is optional (required=False)
+        * completed_projects optional (min 0; clamped server-side)
+        * completed_steps optional (required=False)
+        * total_steps optional (required=False)
         * target_projects min=1 (HTML + field.min_value)
     - Enhanced UX via JS/CSS:
         * in-input calendar for Deadline (min=today, past dates greyed)
         * per-field Reset + Reset all
         * top error banner that hides/reappears as fields are fixed
     """
-    # Load goal-specific JS and reuse shared CSS styles.
     class Media:
         js = ("users/admin/goal_form_ui.js",)
         css = {"all": ("users/admin/project_end_date_toggle.css",)}
 
     list_display = (
-        "user", "title", "target_projects", "deadline",
-        "total_steps", "completed_steps", "steps_progress_display", "created_at",
+        "user",
+        "title",
+        "target_projects",
+        "completed_projects",
+        "deadline",
+        "total_steps",
+        "completed_steps",
+        "projects_progress_display",
+        "steps_progress_display",
+        "overall_progress_display",
+        "created_at",
     )
-    list_filter = ("deadline", "created_at", "total_steps", "completed_steps")
+    list_filter = (
+        "deadline",
+        "created_at",
+        "total_steps",
+        "completed_steps",
+    )
     search_fields = ("title", "target_projects", "user__username", "user__email")
     ordering = ("deadline",)
     inlines = [GoalStepInline]
@@ -501,6 +510,7 @@ class GoalAdmin(admin.ModelAdmin):
         "user",
         "title",
         "target_projects",
+        "completed_projects",
         "deadline",
         "total_steps",
         "completed_steps",
@@ -511,39 +521,65 @@ class GoalAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
 
-        # Labels (admin-only; model verbose_names unchanged)
+        # Labels + HTML constraints
         if "target_projects" in form.base_fields:
-            form.base_fields["target_projects"].label = "Target number of projects to build"
-            # Enforce min=1 in admin form + HTML attrs
+            bf = form.base_fields["target_projects"]
+            bf.label = "Target number of projects to build"
             try:
-                form.base_fields["target_projects"].min_value = 1
+                bf.min_value = 1
             except Exception:
                 pass
-            widget = form.base_fields["target_projects"].widget
             try:
-                widget.input_type = "number"
+                bf.widget.input_type = "number"
             except Exception:
                 pass
-            widget.attrs.update({"min": "1", "step": "1"})
+            bf.widget.attrs.update({"min": "1", "step": "1"})
+
+        if "completed_projects" in form.base_fields:
+            bf = form.base_fields["completed_projects"]
+            bf.label = "Accomplished projects"
+            bf.required = False
+            try:
+                bf.widget.input_type = "number"
+            except Exception:
+                pass
+            # server clamps to target; still provide a friendly min in the UI
+            bf.widget.attrs.update({"min": "0", "step": "1"})
 
         if "total_steps" in form.base_fields:
-            form.base_fields["total_steps"].label = "Overall required steps"
-            form.base_fields["total_steps"].required = False
+            bf = form.base_fields["total_steps"]
+            bf.label = "Overall required steps"
+            bf.required = False
 
         if "completed_steps" in form.base_fields:
-            form.base_fields["completed_steps"].label = "Accomplished steps"
-            form.base_fields["completed_steps"].required = False
+            bf = form.base_fields["completed_steps"]
+            bf.label = "Accomplished steps"
+            bf.required = False
 
-        # Remove static help so the JS can show a single dynamic helper under Deadline
+        # Let JS show a single dynamic helper under Deadline
         if "deadline" in form.base_fields:
             form.base_fields["deadline"].help_text = ""
 
         return form
 
-    # Display helper for progress %
+    # ----- list_display helpers -----
+    def projects_progress_display(self, obj):
+        try:
+            return f"{obj.projects_progress_percent}%"
+        except Exception:
+            return "—"
+    projects_progress_display.short_description = "Projects progress"
+
     def steps_progress_display(self, obj):
         try:
             return f"{obj.steps_progress_percent}%"
         except Exception:
             return "—"
     steps_progress_display.short_description = "Steps progress"
+
+    def overall_progress_display(self, obj):
+        try:
+            return f"{obj.overall_progress_percent}%"
+        except Exception:
+            return "—"
+    overall_progress_display.short_description = "Overall progress"

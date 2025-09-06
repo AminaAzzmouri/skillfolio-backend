@@ -383,6 +383,97 @@ Content-Type: application/json
   "deadline": "2006-01-01"
 }
 
+### Create a goal WITH accomplished projects (new field)
+# @name goalProj1
+POST {{base}}/api/goals/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Build 3 mini-apps",
+  "target_projects": 3,
+  "completed_projects": 1,
+  "deadline": "2025-12-31"
+}
+
+
+### Verify it appears with projects_progress_percent
+GET {{base}}/api/goals/?ordering=-created_at
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### PATCH goalProj1 — set completed_projects ABOVE target (server clamps to target)
+PATCH {{base}}/api/goals/{{goalProj1.response.body.id}}/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "completed_projects": 5
+}
+# Expect response.completed_projects == 3 (clamped to target)
+
+
+### PATCH goalProj1 — raise steps total, then try to exceed completed_steps (server clamps)
+PATCH {{base}}/api/goals/{{goalProj1.response.body.id}}/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "total_steps": 4,
+  "completed_steps": 10
+}
+# Expect response.completed_steps == 4
+
+
+### Ordering by accomplished projects (desc)
+GET {{base}}/api/goals/?ordering=-completed_projects
+Authorization: Bearer {{loginEmail.response.body.access}}
+
+
+### Negative: create goal with NEGATIVE completed_projects (expect 400)
+POST {{base}}/api/goals/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Bad accomplished projects",
+  "target_projects": 2,
+  "completed_projects": -2,
+  "deadline": "2026-06-01"
+}
+
+
+### Negative: PATCH with NEGATIVE accomplished projects (expect 400)
+PATCH {{base}}/api/goals/{{goalProj1.response.body.id}}/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "completed_projects": -1
+}
+
+
+### Create another goal to compare ordering/progress
+# @name goalProj2
+POST {{base}}/api/goals/
+Authorization: Bearer {{loginEmail.response.body.access}}
+Content-Type: application/json
+
+{
+  "title": "Two demos",
+  "target_projects": 2,
+  "completed_projects": 2,
+  "deadline": "2025-10-31",
+  "total_steps": 0,
+  "completed_steps": 0
+}
+# Expect projects_progress_percent ≈ 100
+
+
+### Analytics — Goals with progress (should include projects_progress_percent & steps_progress_percent)
+GET {{base}}/api/analytics/goals-progress/
+Authorization: Bearer {{loginEmail.response.body.access}}
+
 # =========================================================
 # ANALYTICS & DOCS & ROOT
 # =========================================================

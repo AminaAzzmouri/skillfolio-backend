@@ -377,7 +377,6 @@ class Goal(models.Model):
       - target_projects   -> "Target number of projects to build"
       - total_steps       -> "Overall required steps"
       - completed_steps   -> "Accomplished steps"
-    These names now propagate to admin, forms, and serializers by default.
     """
     user = models.ForeignKey(
         User,
@@ -387,28 +386,29 @@ class Goal(models.Model):
     )
     title = models.CharField(max_length=255, help_text="Short label for this goal.")
 
-    # Keep IntegerField (positivity still enforced by clean()) to avoid risky data migration.
-    # If you want a stricter field type later, we can switch to PositiveIntegerField in a follow-up.
+    # Projects plan (independent of real Project model)
+    # Keep IntegerField; enforce positivity in clean()
     target_projects = models.IntegerField(
         verbose_name="Target number of projects to build",
         help_text="Number of projects to complete (must be ≥ 1).",
     )
-
-    deadline = models.DateField(
-        help_text="Target deadline."
+    # NEW: how many projects the user has accomplished toward this goal
+    completed_projects = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Accomplished projects",
+        help_text="Number of projects you've actually completed toward this goal.",
     )
 
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Creation timestamp.",
-    )
+    deadline = models.DateField(help_text="Target deadline.")
 
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp.")
+
+    # Optional checklist integers (kept for fallback and quick summaries)
     total_steps = models.PositiveIntegerField(
         default=0,
         verbose_name="Overall required steps",
         help_text="Total checklist steps (optional).",
     )
-
     completed_steps = models.PositiveIntegerField(
         default=0,
         verbose_name="Accomplished steps",
@@ -424,11 +424,11 @@ class Goal(models.Model):
         from datetime import date as _date
         errors = {}
 
-        # Must be positive
+        # target must be positive
         if self.target_projects is None or self.target_projects <= 0:
             errors["target_projects"] = "target_projects must be a positive integer."
 
-        # Future-only deadline
+        # Future-only (or today) deadline
         if self.deadline and self.deadline < _date.today():
             errors["deadline"] = "deadline cannot be in the past."
 
@@ -440,9 +440,16 @@ class Goal(models.Model):
         if self.completed_steps > self.total_steps:
             self.completed_steps = self.total_steps
 
+        # Clamp completed_projects to [0, target_projects]
+        if self.completed_projects is None or self.completed_projects < 0:
+            self.completed_projects = 0
+        if self.target_projects and self.completed_projects > self.target_projects:
+            self.completed_projects = self.target_projects
+
         if errors:
             raise ValidationError(errors)
 
+    # ---------- Steps rollups (from related GoalStep) ----------
     @property
     def steps_total(self) -> int:
         return getattr(self, "steps", None).count() if hasattr(self, "steps") else 0
@@ -453,7 +460,10 @@ class Goal(models.Model):
         return rel.filter(is_done=True).count() if rel is not None else 0
 
     @property
-    def steps_progress_percent(self):
+    def steps_progress_percent(self) -> int:
+        """
+        Prefer named steps if they exist; otherwise fall back to the integers.
+        """
         total = self.steps_total
         if total > 0:
             done = self.steps_completed
@@ -462,8 +472,24 @@ class Goal(models.Model):
             return round(100 * (self.completed_steps / float(self.total_steps)))
         return 0
 
+    # ---------- Projects progress (independent counter) ----------
+    @property
+    def projects_progress_percent(self) -> int:
+        tgt = self.target_projects or 0
+        if tgt <= 0:
+            return 0
+        done = min(max(self.completed_projects or 0, 0), tgt)
+        return round(100 * (done / float(tgt)))
+
+    # ---------- Overall progress (average of the two bars) ----------
+    @property
+    def overall_progress_percent(self) -> int:
+        pp = self.projects_progress_percent
+        sp = self.steps_progress_percent
+        return round((pp + sp) / 2.0)
+
     def __str__(self):
-        return f"{self.user.username} - {self.title or ''} ({self.target_projects} by {self.deadline})"
+        return f"{self.user.username} - {self.title or ''} ({self.completed_projects}/{self.target_projects} by {self.deadline})"
 
 
 class GoalStep(models.Model):
@@ -495,10 +521,8 @@ class GoalStep(models.Model):
     # ------- keep parent goal counts in sync on every change -------
     def _sync_parent_counts(self):
         gid = self.goal_id
-        # Recompute totals from the DB to avoid drift.
         total = GoalStep.objects.filter(goal_id=gid).count()
         done = GoalStep.objects.filter(goal_id=gid, is_done=True).count()
-        # Use update() to avoid triggering Goal.clean() validations while syncing.
         Goal.objects.filter(pk=gid).update(total_steps=total, completed_steps=done)
 
     def save(self, *args, **kwargs):
@@ -508,7 +532,6 @@ class GoalStep(models.Model):
     def delete(self, *args, **kwargs):
         gid = self.goal_id
         super().delete(*args, **kwargs)
-        # After delete, recompute using gid (self.goal_id no longer available)
         total = GoalStep.objects.filter(goal_id=gid).count()
         done = GoalStep.objects.filter(goal_id=gid, is_done=True).count()
         Goal.objects.filter(pk=gid).update(total_steps=total, completed_steps=done)

@@ -342,24 +342,36 @@ class ProjectViewSet(OwnerScopedModelViewSet):
             return super().destroy(request, *args, **kwargs)
 
 
+# -----------------------------------------------------------------------------
+# Goals & GoalSteps
+# -----------------------------------------------------------------------------
+
 class GoalViewSet(OwnerScopedModelViewSet):
     """
     Goals API
     - Filtering:   ?deadline=<YYYY-MM-DD>
     - Ordering:    ?ordering=created_at | -created_at | deadline | -deadline
-                   | total_steps | -total_steps | completed_steps | -completed_steps | title | -title
+                   | total_steps | -total_steps | completed_steps | -completed_steps
+                   | completed_projects | -completed_projects | title | -title
 
     Admin parity
     - Field naming in /api/docs uses Admin-like titles:
-      * target_projects  → "Target number of projects to build"
-      * total_steps      → "Overall required steps" (optional)
-      * completed_steps  → "Accomplished steps" (optional)
-    - Field order in request body mirrors Admin form: title → target_projects → deadline → total_steps → completed_steps.
+      * target_projects     → "Target number of projects to build"
+      * completed_projects  → "Accomplished projects" (optional; clamped to target)
+      * total_steps         → "Overall required steps" (optional)
+      * completed_steps     → "Accomplished steps" (optional)
+    - Field order in request body mirrors Admin form:
+      title → target_projects → completed_projects → deadline → total_steps → completed_steps.
     """
     queryset = Goal.objects.all()
     serializer_class = GoalSerializer
     filterset_fields = ["deadline"]
-    ordering_fields = ["created_at", "deadline", "total_steps", "completed_steps", "title"]
+    ordering_fields = [
+        "created_at", "deadline",
+        "total_steps", "completed_steps",
+        "completed_projects",
+        "title",
+    ]
     ordering = ["-created_at"]  # default newest first
 
     # Optional: schema docs for create/partial update (only if drf-yasg is present)
@@ -370,12 +382,17 @@ class GoalViewSet(OwnerScopedModelViewSet):
         _resp_ok = _resp_item_ok
 
         _steps_props = {
-            # ORDER mirrors Admin form: title → target_projects → deadline → total_steps → completed_steps
+            # ORDER mirrors Admin form
             "title": openapi.Schema(type=openapi.TYPE_STRING, description="Goal title"),
             "target_projects": openapi.Schema(
                 type=openapi.TYPE_INTEGER,
                 title="Target number of projects to build",
                 description="Must be ≥ 1.",
+            ),
+            "completed_projects": openapi.Schema(
+                type=openapi.TYPE_INTEGER,
+                title="Accomplished projects",
+                description="Optional; clamped to target_projects.",
             ),
             "deadline": openapi.Schema(
                 type=openapi.TYPE_STRING,
@@ -399,8 +416,9 @@ class GoalViewSet(OwnerScopedModelViewSet):
                 "List your goals (owner-scoped).\n\n"
                 "Goals API\n\n"
                 "• Filtering: `?deadline=<YYYY-MM-DD>`\n"
-                "• Ordering: `?ordering=created_at | -created_at | deadline | -deadline | total_steps | -total_steps | "
-                "completed_steps | -completed_steps | title | -title`\n\n"
+                "• Ordering: `?ordering=created_at | -created_at | deadline | -deadline | "
+                "total_steps | -total_steps | completed_steps | -completed_steps | "
+                "completed_projects | -completed_projects | title | -title`\n\n"
                 "Admin parity\n\n"
                 "• Field naming in /api/docs uses Admin-like titles.\n"
                 "• Field order in request body mirrors Admin forms."
@@ -418,13 +436,14 @@ class GoalViewSet(OwnerScopedModelViewSet):
                 example={
                     "title": "Finish 3 portfolio projects",
                     "target_projects": 3,
+                    "completed_projects": 1,
                     "deadline": "2025-12-31",
                     "total_steps": 6,
                     "completed_steps": 2
                 },
             ),
             responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
-            operation_description="Create a goal. Field titles/order mirror Admin; steps are optional.",
+            operation_description="Create a goal. Field titles/order mirror Admin; projects/steps are optional.",
         )
         def create(self, request, *args, **kwargs):
             return super().create(request, *args, **kwargs)
@@ -444,7 +463,7 @@ class GoalViewSet(OwnerScopedModelViewSet):
             request_body=openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties=_steps_props,
-                example={"completed_steps": 3},
+                example={"completed_steps": 3, "completed_projects": 2},
             ),
             responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
             operation_description="Partially update a goal (PATCH). Titles/order mirror Admin.",
@@ -494,62 +513,6 @@ class GoalStepViewSet(viewsets.ModelViewSet):
         if goal.user != self.request.user:
             raise serializers.ValidationError("You do not own this goal.")
         serializer.save()
-
-    if HAS_YASG:
-        _resp_list_ok = openapi.Response("OK", GoalStepSerializer(many=True))
-        _resp_item_ok = openapi.Response("OK", GoalStepSerializer())
-        _resp_created = openapi.Response("Created", GoalStepSerializer())
-        _resp_ok = _resp_item_ok
-
-        @swagger_auto_schema(
-            operation_description=(
-                "List goal steps you own (owner-scoped via parent goal).\n\n"
-                "GoalStep API\n\n"
-                "• Filtering: `?goal=` & `is_done=`\n"
-                "• Search: `?search=` (title)\n"
-                "• Ordering: `?ordering=order | -order | created_at | -created_at`\n\n"
-                "Security\n\n"
-                "• Queryset is limited to steps where the parent goal belongs to the current user."
-            ),
-            responses={200: _resp_list_ok, 401: "Unauthorized"},
-        )
-        def list(self, request, *args, **kwargs):
-            return super().list(request, *args, **kwargs)
-
-        @swagger_auto_schema(
-            operation_description="Retrieve a goal step by ID (owner-scoped via parent goal).",
-            responses={200: _resp_item_ok, 401: "Unauthorized", 404: "Not Found"},
-        )
-        def retrieve(self, request, *args, **kwargs):
-            return super().retrieve(request, *args, **kwargs)
-
-        @swagger_auto_schema(
-            operation_description="Create a goal step (parent goal must belong to you).",
-            responses={201: _resp_created, 400: "Bad Request", 401: "Unauthorized"},
-        )
-        def create(self, request, *args, **kwargs):
-            return super().create(request, *args, **kwargs)
-
-        @swagger_auto_schema(
-            operation_description="Fully update a goal step (PUT).",
-            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
-        )
-        def update(self, request, *args, **kwargs):
-            return super().update(request, *args, **kwargs)
-
-        @swagger_auto_schema(
-            operation_description="Partially update a goal step (PATCH).",
-            responses={200: _resp_ok, 400: "Bad Request", 401: "Unauthorized", 404: "Not Found"},
-        )
-        def partial_update(self, request, *args, **kwargs):
-            return super().partial_update(request, *args, **kwargs)
-
-        @swagger_auto_schema(
-            operation_description="Delete a goal step.",
-            responses={204: "No Content", 401: "Unauthorized", 404: "Not Found"},
-        )
-        def destroy(self, request, *args, **kwargs):
-            return super().destroy(request, *args, **kwargs)
 
 
 # -----------------------------------------------------------------------------
@@ -603,7 +566,10 @@ def analytics_summary(request):
     method="get",
     tags=["Analytics"],
     operation_description=(
-        "List your goals including computed `progress_percent`.\n\n"
+        "List your goals including computed progress fields:\n"
+        "• projects_progress_percent\n"
+        "• steps_progress_percent\n"
+        "• overall_progress_percent\n\n"
         "Responses:\n"
         "- 200: OK — array of Goal objects with progress fields\n"
         "- 401: Unauthorized"
@@ -618,12 +584,11 @@ def analytics_summary(request):
 def analytics_goals_progress(request):
     """
     GET /api/analytics/goals-progress/
-    Return the current user's goals with computed `progress_percent`.
-
-    Implementation detail
-    - The serializer needs the request context to determine which user's
-      completed projects to count for progress.
+    Return the current user's goals with computed per-goal progress:
+      - projects_progress_percent (completed_projects / target_projects)
+      - steps_progress_percent    (from named steps when present, else totals)
+      - overall_progress_percent  (average of the two)
     """
     qs = Goal.objects.filter(user=request.user).order_by("-created_at")
-    ser = GoalSerializer(qs, many=True, context={"request": request})
+    ser = GoalSerializer(qs, many=True)  # no external context needed
     return Response(ser.data, status=status.HTTP_200_OK)

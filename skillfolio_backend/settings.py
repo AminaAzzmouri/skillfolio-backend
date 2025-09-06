@@ -102,7 +102,7 @@ DEBUG = _get_bool("DJANGO_DEBUG", True)
 
 # --- Frontend URL & CORS/CSRF (dev-friendly defaults) ---
 # Root redirect will send "/" here (see urls.py). In dev we default to Vite's 5173.
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173/")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174/")
 
 # Dev CORS toggle (allow all while DEBUG=True unless overridden by env).
 # In prod set CORS_ALLOW_ALL_ORIGINS=False and specify CORS_ALLOWED_ORIGINS explicitly.
