@@ -121,6 +121,16 @@ if not CORS_ALLOWED_ORIGINS and FRONTEND_URL:
     derived = _origin_from(FRONTEND_URL)
     if derived:
         CORS_ALLOWED_ORIGINS = [derived]
+        
+from corsheaders.defaults import default_headers, default_methods
+
+CORS_ALLOW_CREDENTIALS = False  # you're using Bearer tokens, not cookies
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "content-type",
+]
+CORS_ALLOW_METHODS = list(default_methods)  # GET, POST, PUT, PATCH, DELETE, OPTIONS
+
 
 # Optional: CSRF (useful if you ever move to cookie auth; harmless otherwise)
 CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS", [])

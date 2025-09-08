@@ -33,6 +33,7 @@ from rest_framework import routers, permissions
 from users import views  # resource ViewSets + analytics + profile
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 
 # Auth endpoints (centralized)
 from users.auth_views import (
@@ -137,6 +138,8 @@ urlpatterns = [
     path("api/schema/", schema_view.without_ui(cache_timeout=0),         name="openapi-schema"),
 
     path("api/", include("announcements.urls", namespace="announcements")),
+    
+    path("health/", lambda r: JsonResponse({"ok": True}, status=200)),
 ]
 
 # Dev-only media serving (uploads in /media/)
